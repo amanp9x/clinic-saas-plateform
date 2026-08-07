@@ -1,0 +1,387 @@
+// Foundational schema for Phase 0. Only entities needed to support authentication,
+// RBAC, and basic clinic/doctor/patient identity are modeled here. Appointments,
+// scheduling, live queue, billing, EMR, etc. are added in later phases as those
+// modules are implemented.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  GUEST
+  PATIENT
+  DOCTOR
+  RECEPTIONIST
+  CLINIC_STAFF
+  CLINIC_ADMIN
+  HOSPITAL_ADMIN
+  LAB_PARTNER
+  PHARMACY_PARTNER
+  PLATFORM_ADMIN
+  SUPER_ADMIN
+}
+
+enum OtpPurpose {
+  LOGIN
+  REGISTRATION
+  EMAIL_VERIFICATION
+  MOBILE_VERIFICATION
+  PASSWORD_RESET
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNDISCLOSED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+// ---------------------------------------------------------------------------
+// Identity & Auth
+// ---------------------------------------------------------------------------
+
+model User {
+  id                  String    @id @default(uuid())
+  email               String?   @unique
+  phone               String?   @unique
+  passwordHash        String?
+  role                UserRole  @default(PATIENT)
+  isEmailVerified     Boolean   @default(false)
+  isMobileVerified    Boolean   @default(false)
+  isActive            Boolean   @default(true)
+  lastLoginAt         DateTime?
+  failedLoginAttempts Int       @default(0)
+  lockedUntil         DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  sessions       Session[]
+  auditLogs      AuditLog[]
+  doctorProfile  Doctor?
+  patientProfile Patient?
+  clinicStaff    ClinicStaffMember[]
+
+  @@index([role])
+  @@map("users")
+}
+
+/// A logical login instance (one per device/browser). Stable identity across refresh-token
+/// rotations — the JWT `sessionId` claim points here, not at the underlying RefreshToken row.
+model Session {
+  id            String    @id @default(uuid())
+  userId        String
+  userAgent     String?
+  ipAddress     String?
+  deviceLabel   String?
+  createdAt     DateTime  @default(now())
+  lastUsedAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String?
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshToken RefreshToken?
+
+  @@index([userId])
+  @@index([userId, revokedAt])
+  @@map("sessions")
+}
+
+/// The single currently-valid refresh token for a session. Rotated in place on each
+/// /auth/refresh call; presenting a stale (already-rotated) hash revokes the whole session.
+model RefreshToken {
+  id        String   @id @default(uuid())
+  sessionId String   @unique
+  tokenHash String   @unique
+  expiresAt DateTime
+  updatedAt DateTime @updatedAt
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model OtpCode {
+  id          String     @id @default(uuid())
+  identifier  String
+  codeHash    String
+  purpose     OtpPurpose
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  consumedAt  DateTime?
+  expiresAt   DateTime
+  createdAt   DateTime   @default(now())
+
+  @@index([identifier, purpose])
+  @@index([identifier, purpose, createdAt])
+  @@map("otp_codes")
+}
+
+// ---------------------------------------------------------------------------
+// Clinics, Doctors, Patients
+// ---------------------------------------------------------------------------
+
+model Clinic {
+  id           String  @id @default(uuid())
+  name         String
+  slug         String  @unique
+  email        String?
+  phone        String?
+  description  String?
+  photoUrl     String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String  @default("IN")
+  timezone     String  @default("Asia/Kolkata")
+  isActive     Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  doctors ClinicDoctor[]
+  staff   ClinicStaffMember[]
+
+  @@index([slug])
+  @@index([city])
+  @@map("clinics")
+}
+
+/// A hospital is a distinct facility type from a clinic (larger, multi-department, its own
+/// admin role). No doctor-affiliation model yet — Phase 2 only needs a public directory listing.
+model Hospital {
+  id           String  @id @default(uuid())
+  name         String
+  slug         String  @unique
+  email        String?
+  phone        String?
+  description  String?
+  photoUrl     String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String  @default("IN")
+  bedCount     Int?
+  isActive     Boolean @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([slug])
+  @@index([city])
+  @@map("hospitals")
+}
+
+model Specialization {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  slug        String  @unique
+  iconName    String?
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  doctors Doctor[]
+
+  @@index([slug])
+  @@map("specializations")
+}
+
+model Doctor {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  slug               String   @unique
+  displayName        String
+  specializationId   String?
+  qualifications     String?
+  bio                String?
+  gender             Gender?
+  languages          String[]
+  yearsExperience    Int?
+  consultationFee    Decimal? @db.Decimal(10, 2)
+  profileImageUrl    String?
+  onlineConsultation Boolean  @default(false)
+  ratingAverage      Float?
+  ratingCount        Int      @default(0)
+  isActive           Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization Specialization? @relation(fields: [specializationId], references: [id], onDelete: SetNull)
+  clinics        ClinicDoctor[]
+  reviews        DoctorReview[]
+
+  @@index([slug])
+  @@index([specializationId])
+  @@index([gender])
+  @@map("doctors")
+}
+
+/// Many-to-many: a doctor can practice at multiple clinics, with per-clinic timings.
+model ClinicDoctor {
+  id            String    @id @default(uuid())
+  clinicId      String
+  doctorId      String
+  isActive      Boolean   @default(true)
+  timings       String?
+  availableDays Weekday[]
+
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, doctorId])
+  @@index([doctorId])
+  @@map("clinic_doctors")
+}
+
+model DoctorReview {
+  id         String   @id @default(uuid())
+  doctorId   String
+  authorName String
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId])
+  @@map("doctor_reviews")
+}
+
+model Testimonial {
+  id           String  @id @default(uuid())
+  authorName   String
+  authorDetail String?
+  message      String
+  rating       Int?
+  avatarUrl    String?
+  isFeatured   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([isFeatured])
+  @@map("testimonials")
+}
+
+model Article {
+  id            String   @id @default(uuid())
+  title         String
+  slug          String   @unique
+  excerpt       String
+  coverImageUrl String?
+  category      String?
+  authorName    String?
+  publishedAt   DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([slug])
+  @@index([publishedAt])
+  @@map("articles")
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@map("contact_messages")
+}
+
+model Patient {
+  id             String    @id @default(uuid())
+  userId         String    @unique
+  fullName       String
+  dateOfBirth    DateTime?
+  gender         Gender?
+  bloodGroup     String?
+  addressLine1   String?
+  city           String?
+  state          String?
+  postalCode     String?
+  emergencyName  String?
+  emergencyPhone String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("patients")
+}
+
+/// Receptionists / clinic staff / clinic admins scoped to a specific clinic.
+model ClinicStaffMember {
+  id       String  @id @default(uuid())
+  userId   String
+  clinicId String
+  title    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clinicId])
+  @@index([clinicId])
+  @@map("clinic_staff_members")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+  @@index([actorUserId])
+  @@map("audit_logs")
+}
