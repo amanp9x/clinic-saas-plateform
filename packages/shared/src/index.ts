@@ -4,5 +4,7 @@ export * from './api-response.js';
 export * from './error-codes.js';
 export * from './types/auth.js';
 export * from './types/catalog.js';
+export * from './types/patient.js';
 export * from './validation/auth.js';
 export * from './validation/catalog.js';
+export * from './validation/patient.js';

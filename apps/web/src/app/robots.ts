@@ -7,7 +7,12 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
       disallow: [
-        '/account',
+        '/dashboard',
+        '/appointments',
+        '/queue',
+        '/medical-records',
+        '/notifications',
+        '/settings',
         '/login',
         '/register',
         '/otp-login',

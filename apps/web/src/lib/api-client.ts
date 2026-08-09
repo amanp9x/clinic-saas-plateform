@@ -45,16 +45,18 @@ async function refreshAccessToken(): Promise<boolean> {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { body, skipAuthRetry, headers, ...rest } = options;
   const accessToken = tokenStore.get();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
   const res = await fetch(`${clientEnv.apiUrl}${path}`, {
     ...rest,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      // FormData sets its own multipart boundary — never override its Content-Type.
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...headers,
     },
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
   });
 
   if (res.status === 401 && !skipAuthRetry) {

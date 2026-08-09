@@ -69,6 +69,21 @@ export const authRepository = {
     return prisma.user.update({ where: { id: userId }, data: { isMobileVerified: true } });
   },
 
+  updateEmail(userId: string, email: string) {
+    return prisma.user.update({ where: { id: userId }, data: { email, isEmailVerified: true } });
+  },
+
+  updatePhone(userId: string, phone: string) {
+    return prisma.user.update({ where: { id: userId }, data: { phone, isMobileVerified: true } });
+  },
+
+  deactivate(userId: string) {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { isActive: false, deletedAt: new Date() },
+    });
+  },
+
   async recordFailedLogin(userId: string, maxAttempts: number, lockoutMinutes: number) {
     const user = await prisma.user.update({
       where: { id: userId },

@@ -1,5 +1,19 @@
-import { PrismaClient, Gender, Weekday, UserRole } from '@prisma/client';
+import {
+  PrismaClient,
+  Gender,
+  Weekday,
+  UserRole,
+  AppointmentStatus,
+  LabReportStatus,
+  MedicalRecordType,
+  AddressLabel,
+  NotificationType,
+  type Doctor,
+  type Clinic,
+} from '@prisma/client';
 import { slugify } from '../src/utils/slugify.js';
+import { hashPassword } from '../src/utils/password.js';
+import { DEMO_PATIENT_EMAIL, DEMO_PATIENT_PASSWORD } from './seed-constants.js';
 
 const prisma = new PrismaClient();
 
@@ -424,6 +438,348 @@ const ARTICLES = [
   },
 ];
 
+function daysFromNow(days: number, hour = 10, minute = 0): Date {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, minute, 0, 0);
+  return date;
+}
+
+/**
+ * Seeds one fully-populated demo patient account (appointments across every status,
+ * prescriptions, lab reports, vaccinations, vitals, medical history, notifications) so the
+ * Patient Portal has real data to display without needing a booking engine to create it.
+ * Credentials: DEMO_PATIENT_EMAIL / DEMO_PATIENT_PASSWORD — documented in the README.
+ */
+async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[]): Promise<void> {
+  const byName = (name: string) => doctorRecords.find((d) => d.displayName === name)!;
+  const clinicByName = (name: string) => clinicRecords.find((c) => c.name === name)!;
+
+  const cardiologist = byName('Dr. Aditi Sharma');
+  const physician = byName('Dr. Rohan Mehta');
+  const dermatologist = byName('Dr. Kavya Reddy');
+  const dentist = byName('Dr. Priya Iyer');
+  const orthopedic = byName('Dr. Vikram Singh');
+
+  const sunriseClinic = clinicByName('Sunrise Family Clinic');
+  const cityCareClinic = clinicByName('CityCare Multispeciality Clinic');
+  const wellnessClinic = clinicByName('Wellness Point Clinic');
+
+  const passwordHash = await hashPassword(DEMO_PATIENT_PASSWORD);
+  const user = await prisma.user.upsert({
+    where: { email: DEMO_PATIENT_EMAIL },
+    update: {},
+    create: {
+      email: DEMO_PATIENT_EMAIL,
+      phone: '+919820012345',
+      passwordHash,
+      role: UserRole.PATIENT,
+      isEmailVerified: true,
+      isMobileVerified: true,
+      isActive: true,
+    },
+  });
+
+  const patient = await prisma.patient.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: {
+      userId: user.id,
+      fullName: 'Ananya Kapoor',
+      dateOfBirth: new Date('1994-03-18'),
+      gender: Gender.FEMALE,
+      bloodGroup: 'O+',
+      allergies: ['Penicillin', 'Peanuts'],
+      medicalConditions: ['Mild asthma'],
+      addressLine1: '12 Palm Grove Society',
+      city: 'Mumbai',
+      state: 'Maharashtra',
+      postalCode: '400050',
+      emergencyName: 'Rohit Kapoor',
+      emergencyPhone: '+919820098765',
+    },
+  });
+
+  const existingAddresses = await prisma.patientAddress.count({ where: { patientId: patient.id } });
+  if (existingAddresses === 0) {
+    await prisma.patientAddress.createMany({
+      data: [
+        {
+          patientId: patient.id,
+          label: AddressLabel.HOME,
+          addressLine1: '12 Palm Grove Society',
+          city: 'Mumbai',
+          state: 'Maharashtra',
+          postalCode: '400050',
+          isDefault: true,
+        },
+        {
+          patientId: patient.id,
+          label: AddressLabel.WORK,
+          addressLine1: '4th Floor, Prism Towers, BKC',
+          city: 'Mumbai',
+          state: 'Maharashtra',
+          postalCode: '400051',
+          isDefault: false,
+        },
+      ],
+    });
+  }
+
+  await prisma.notificationPreference.upsert({
+    where: { userId: user.id },
+    update: {},
+    create: { userId: user.id },
+  });
+
+  const existingAppointments = await prisma.appointment.count({ where: { patientId: patient.id } });
+  if (existingAppointments === 0) {
+    const upcoming = await prisma.appointment.create({
+      data: {
+        patientId: patient.id,
+        doctorId: cardiologist.id,
+        clinicId: sunriseClinic.id,
+        scheduledAt: daysFromNow(5, 11, 30),
+        status: AppointmentStatus.CONFIRMED,
+        reasonForVisit: 'Routine cardiac checkup',
+        consultationFee: cardiologist.consultationFee,
+      },
+    });
+
+    const today = await prisma.appointment.create({
+      data: {
+        patientId: patient.id,
+        doctorId: physician.id,
+        clinicId: sunriseClinic.id,
+        scheduledAt: daysFromNow(0, 16, 0),
+        status: AppointmentStatus.CONFIRMED,
+        tokenNumber: '24',
+        reasonForVisit: 'Persistent cough and mild fever',
+        consultationFee: physician.consultationFee,
+      },
+    });
+
+    const completed1 = await prisma.appointment.create({
+      data: {
+        patientId: patient.id,
+        doctorId: dermatologist.id,
+        clinicId: cityCareClinic.id,
+        scheduledAt: daysFromNow(-20, 10, 0),
+        status: AppointmentStatus.COMPLETED,
+        completedAt: daysFromNow(-20, 10, 25),
+        reasonForVisit: 'Skin allergy follow-up',
+        consultationFee: dermatologist.consultationFee,
+      },
+    });
+
+    const completed2 = await prisma.appointment.create({
+      data: {
+        patientId: patient.id,
+        doctorId: dentist.id,
+        clinicId: wellnessClinic.id,
+        scheduledAt: daysFromNow(-45, 9, 30),
+        status: AppointmentStatus.COMPLETED,
+        completedAt: daysFromNow(-45, 10, 0),
+        reasonForVisit: 'Routine dental cleaning',
+        consultationFee: dentist.consultationFee,
+      },
+    });
+
+    await prisma.appointment.create({
+      data: {
+        patientId: patient.id,
+        doctorId: orthopedic.id,
+        clinicId: wellnessClinic.id,
+        scheduledAt: daysFromNow(-10, 15, 0),
+        status: AppointmentStatus.CANCELLED,
+        cancelReason: 'Schedule conflict — rebooking separately',
+        cancelledAt: daysFromNow(-11, 9, 0),
+        reasonForVisit: 'Knee pain evaluation',
+      },
+    });
+
+    console.log('Seeding prescriptions, lab reports, vaccinations, vitals, medical history...');
+
+    await prisma.prescription.create({
+      data: {
+        patientId: patient.id,
+        doctorId: dermatologist.id,
+        appointmentId: completed1.id,
+        issuedAt: daysFromNow(-20, 10, 25),
+        medications: [
+          {
+            name: 'Cetirizine',
+            dosage: '10mg',
+            frequency: 'Once daily',
+            duration: '7 days',
+            instructions: 'Take at night',
+          },
+          {
+            name: 'Hydrocortisone cream',
+            dosage: '1%',
+            frequency: 'Twice daily',
+            duration: '5 days',
+            instructions: 'Apply thinly to affected area',
+          },
+        ],
+        notes: 'Avoid known allergens. Follow up if symptoms persist beyond a week.',
+      },
+    });
+
+    await prisma.prescription.create({
+      data: {
+        patientId: patient.id,
+        doctorId: dentist.id,
+        appointmentId: completed2.id,
+        issuedAt: daysFromNow(-45, 10, 0),
+        medications: [
+          {
+            name: 'Chlorhexidine mouthwash',
+            dosage: '0.2%',
+            frequency: 'Twice daily',
+            duration: '10 days',
+            instructions: 'Rinse for 30 seconds after brushing',
+          },
+        ],
+        notes: 'Next cleaning recommended in 6 months.',
+      },
+    });
+
+    await prisma.labReport.create({
+      data: {
+        patientId: patient.id,
+        appointmentId: completed1.id,
+        testName: 'Complete Blood Count (CBC)',
+        labName: 'CityCare Diagnostics',
+        status: LabReportStatus.READY,
+        reportDate: daysFromNow(-19, 12, 0),
+        notes: 'All parameters within normal range.',
+      },
+    });
+
+    await prisma.labReport.create({
+      data: {
+        patientId: patient.id,
+        appointmentId: upcoming.id,
+        testName: 'Lipid Profile',
+        labName: 'Sunrise Diagnostics',
+        status: LabReportStatus.PENDING,
+        notes: 'Fasting sample required — scheduled alongside upcoming cardiology visit.',
+      },
+    });
+
+    await prisma.vaccination.createMany({
+      data: [
+        {
+          patientId: patient.id,
+          vaccineName: 'Influenza (Flu)',
+          doseNumber: 1,
+          administeredDate: daysFromNow(-95),
+          nextDueDate: daysFromNow(270),
+          administeredBy: 'Sunrise Family Clinic',
+        },
+        {
+          patientId: patient.id,
+          vaccineName: 'Tetanus-Diphtheria (Td)',
+          doseNumber: 1,
+          administeredDate: daysFromNow(-400),
+          nextDueDate: daysFromNow(3250),
+          administeredBy: 'CityCare Multispeciality Clinic',
+        },
+      ],
+    });
+
+    await prisma.vitalRecord.createMany({
+      data: [
+        {
+          patientId: patient.id,
+          recordedAt: daysFromNow(-20, 10, 5),
+          heightCm: 165,
+          weightKg: 61,
+          bloodPressureSystolic: 118,
+          bloodPressureDiastolic: 76,
+          heartRateBpm: 72,
+          temperatureCelsius: 36.8,
+        },
+        {
+          patientId: patient.id,
+          recordedAt: daysFromNow(-45, 9, 35),
+          heightCm: 165,
+          weightKg: 62,
+          bloodPressureSystolic: 120,
+          bloodPressureDiastolic: 78,
+          heartRateBpm: 75,
+          temperatureCelsius: 36.9,
+        },
+      ],
+    });
+
+    await prisma.medicalRecord.createMany({
+      data: [
+        {
+          patientId: patient.id,
+          recordType: MedicalRecordType.DIAGNOSIS,
+          title: 'Mild persistent asthma',
+          description: 'Diagnosed following recurring wheeze episodes; managed with inhaler as needed.',
+          recordDate: daysFromNow(-400),
+          doctorName: 'Dr. Rohan Mehta',
+        },
+        {
+          patientId: patient.id,
+          recordType: MedicalRecordType.CONSULTATION_NOTE,
+          title: 'Dermatology follow-up',
+          description: 'Contact dermatitis, likely triggered by a new laundry detergent. Prescribed topical treatment.',
+          recordDate: daysFromNow(-20),
+          doctorName: 'Dr. Kavya Reddy',
+        },
+      ],
+    });
+
+    console.log('Seeding notifications...');
+    await prisma.notification.createMany({
+      data: [
+        {
+          userId: user.id,
+          type: NotificationType.APPOINTMENT_UPDATE,
+          title: 'Appointment confirmed',
+          message: `Your appointment with ${cardiologist.displayName} on ${daysFromNow(5).toLocaleDateString('en-IN')} is confirmed.`,
+          relatedEntityType: 'Appointment',
+          relatedEntityId: upcoming.id,
+        },
+        {
+          userId: user.id,
+          type: NotificationType.APPOINTMENT_UPDATE,
+          title: "Today's appointment reminder",
+          message: `You have an appointment with ${physician.displayName} today at 4:00 PM.`,
+          relatedEntityType: 'Appointment',
+          relatedEntityId: today.id,
+        },
+        {
+          userId: user.id,
+          type: NotificationType.PRESCRIPTION_READY,
+          title: 'New prescription available',
+          message: `${dermatologist.displayName} has issued a new prescription for you.`,
+          isRead: true,
+        },
+        {
+          userId: user.id,
+          type: NotificationType.REPORT_READY,
+          title: 'Lab report ready',
+          message: 'Your Complete Blood Count (CBC) report is ready to view.',
+          isRead: true,
+        },
+        {
+          userId: user.id,
+          type: NotificationType.QUEUE_UPDATE,
+          title: 'Queue tracking available soon',
+          message: "Live queue tracking will activate once your doctor's clinic session begins.",
+          isRead: false,
+        },
+      ],
+    });
+  }
+}
+
 async function main() {
   console.log('Seeding specializations...');
   const specializationRecords = await Promise.all(
@@ -492,6 +848,8 @@ async function main() {
     [Weekday.MON, Weekday.TUE, Weekday.WED, Weekday.THU, Weekday.FRI, Weekday.SAT],
   ];
 
+  const doctorRecords: Awaited<ReturnType<typeof prisma.doctor.upsert>>[] = [];
+
   for (let i = 0; i < DOCTORS.length; i++) {
     const d = DOCTORS[i]!;
     const specialization = specializationByName.get(d.specialization);
@@ -556,7 +914,12 @@ async function main() {
         });
       }
     }
+
+    doctorRecords.push(doctor);
   }
+
+  console.log('Seeding demo patient...');
+  await seedDemoPatient(doctorRecords, clinicRecords);
 
   console.log('Seeding testimonials...');
   const existingTestimonials = await prisma.testimonial.count();

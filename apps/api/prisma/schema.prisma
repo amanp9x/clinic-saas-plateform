@@ -55,6 +55,50 @@ enum Weekday {
   SUN
 }
 
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_CONSULTATION
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum LabReportStatus {
+  PENDING
+  READY
+}
+
+enum MedicalRecordType {
+  CONSULTATION_NOTE
+  DIAGNOSIS
+  SURGERY
+  HOSPITALIZATION
+  OTHER
+}
+
+enum AddressLabel {
+  HOME
+  WORK
+  OTHER
+}
+
+enum NotificationType {
+  APPOINTMENT_UPDATE
+  QUEUE_UPDATE
+  PRESCRIPTION_READY
+  REPORT_READY
+  SYSTEM
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  BOTH
+  NONE
+}
+
 // ---------------------------------------------------------------------------
 // Identity & Auth
 // ---------------------------------------------------------------------------
@@ -76,11 +120,13 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  sessions       Session[]
-  auditLogs      AuditLog[]
-  doctorProfile  Doctor?
-  patientProfile Patient?
-  clinicStaff    ClinicStaffMember[]
+  sessions          Session[]
+  auditLogs         AuditLog[]
+  doctorProfile     Doctor?
+  patientProfile    Patient?
+  clinicStaff       ClinicStaffMember[]
+  notifications     Notification[]
+  notificationPrefs NotificationPreference?
 
   @@index([role])
   @@map("users")
@@ -163,8 +209,9 @@ model Clinic {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  doctors ClinicDoctor[]
-  staff   ClinicStaffMember[]
+  doctors      ClinicDoctor[]
+  staff        ClinicStaffMember[]
+  appointments Appointment[]
 
   @@index([slug])
   @@index([city])
@@ -240,6 +287,8 @@ model Doctor {
   specialization Specialization? @relation(fields: [specializationId], references: [id], onDelete: SetNull)
   clinics        ClinicDoctor[]
   reviews        DoctorReview[]
+  appointments   Appointment[]
+  prescriptions  Prescription[]
 
   @@index([slug])
   @@index([specializationId])
@@ -325,25 +374,222 @@ model ContactMessage {
 }
 
 model Patient {
-  id             String    @id @default(uuid())
-  userId         String    @unique
-  fullName       String
-  dateOfBirth    DateTime?
-  gender         Gender?
-  bloodGroup     String?
-  addressLine1   String?
-  city           String?
-  state          String?
-  postalCode     String?
-  emergencyName  String?
-  emergencyPhone String?
+  id                String    @id @default(uuid())
+  userId            String    @unique
+  fullName          String
+  profileImageUrl   String?
+  dateOfBirth       DateTime?
+  gender            Gender?
+  bloodGroup        String?
+  allergies         String[]
+  medicalConditions String[]
+  addressLine1      String?
+  city              String?
+  state             String?
+  postalCode        String?
+  emergencyName     String?
+  emergencyPhone    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses      PatientAddress[]
+  appointments   Appointment[]
+  prescriptions  Prescription[]
+  labReports     LabReport[]
+  vaccinations   Vaccination[]
+  vitalRecords   VitalRecord[]
+  medicalRecords MedicalRecord[]
 
   @@map("patients")
+}
+
+model PatientAddress {
+  id           String       @id @default(uuid())
+  patientId    String
+  label        AddressLabel @default(HOME)
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String?
+  postalCode   String?
+  country      String       @default("IN")
+  isDefault    Boolean      @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("patient_addresses")
+}
+
+// ---------------------------------------------------------------------------
+// Patient Portal: appointments, records, notifications
+// ---------------------------------------------------------------------------
+
+model Appointment {
+  id              String            @id @default(uuid())
+  patientId       String
+  doctorId        String
+  clinicId        String
+  scheduledAt     DateTime
+  status          AppointmentStatus @default(CONFIRMED)
+  tokenNumber     String?
+  reasonForVisit  String?
+  consultationFee Decimal?          @db.Decimal(10, 2)
+  cancelReason    String?
+  cancelledAt     DateTime?
+  completedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  prescriptions Prescription[]
+  labReports    LabReport[]
+
+  @@index([patientId, scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@index([status])
+  @@map("appointments")
+}
+
+model Prescription {
+  id            String   @id @default(uuid())
+  patientId     String
+  doctorId      String
+  appointmentId String?
+  issuedAt      DateTime @default(now())
+  medications   Json
+  notes         String?
+  fileUrl       String?
+
+  createdAt DateTime @default(now())
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, issuedAt])
+  @@map("prescriptions")
+}
+
+model LabReport {
+  id            String          @id @default(uuid())
+  patientId     String
+  appointmentId String?
+  testName      String
+  labName       String?
+  status        LabReportStatus @default(PENDING)
+  reportDate    DateTime?
+  fileUrl       String?
+  notes         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, status])
+  @@map("lab_reports")
+}
+
+model Vaccination {
+  id               String    @id @default(uuid())
+  patientId        String
+  vaccineName      String
+  doseNumber       Int?
+  administeredDate DateTime
+  nextDueDate      DateTime?
+  administeredBy   String?
+  notes            String?
+
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@map("vaccinations")
+}
+
+model VitalRecord {
+  id                     String   @id @default(uuid())
+  patientId              String
+  recordedAt             DateTime @default(now())
+  heightCm               Float?
+  weightKg               Float?
+  bloodPressureSystolic  Int?
+  bloodPressureDiastolic Int?
+  heartRateBpm           Int?
+  temperatureCelsius     Float?
+  bloodSugarMgDl         Int?
+  notes                  String?
+
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, recordedAt])
+  @@map("vital_records")
+}
+
+model MedicalRecord {
+  id            String            @id @default(uuid())
+  patientId     String
+  recordType    MedicalRecordType
+  title         String
+  description   String?
+  recordDate    DateTime
+  doctorName    String?
+  attachmentUrl String?
+
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, recordDate])
+  @@map("medical_records")
+}
+
+model Notification {
+  id                String           @id @default(uuid())
+  userId            String
+  type              NotificationType
+  title             String
+  message           String
+  isRead            Boolean          @default(false)
+  relatedEntityType String?
+  relatedEntityId   String?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id                 String              @id @default(uuid())
+  userId             String              @unique
+  appointmentUpdates Boolean             @default(true)
+  queueUpdates       Boolean             @default(true)
+  prescriptionReady  Boolean             @default(true)
+  reportReady        Boolean             @default(true)
+  channel            NotificationChannel @default(EMAIL)
+
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
 }
 
 /// Receptionists / clinic staff / clinic admins scoped to a specific clinic.

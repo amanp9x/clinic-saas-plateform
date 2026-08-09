@@ -1,7 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-const PROTECTED_PREFIXES = ['/account'];
+const PROTECTED_PREFIXES = [
+  '/dashboard',
+  '/appointments',
+  '/queue',
+  '/medical-records',
+  '/notifications',
+  '/settings',
+];
 
 /**
  * Coarse, cookie-presence-only gate. The web app never holds the JWT signing secret, so this
@@ -23,5 +30,5 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/account/:path*'],
+  matcher: ['/dashboard/:path*', '/appointments/:path*', '/queue/:path*', '/medical-records/:path*', '/notifications/:path*', '/settings/:path*'],
 };

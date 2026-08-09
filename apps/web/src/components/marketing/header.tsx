@@ -70,9 +70,8 @@ export function Header() {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>{user?.role}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem render={<Link href="/account/security" />}>
-                  Account security
-                </DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/dashboard" />}>Dashboard</DropdownMenuItem>
+                <DropdownMenuItem render={<Link href="/settings/profile" />}>Settings</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() =>
@@ -117,8 +116,11 @@ export function Header() {
               <div className="mt-4 flex flex-col gap-2 border-t pt-4">
                 {isAuthenticated ? (
                   <>
-                    <Button variant="outline" render={<Link href="/account/security" />}>
-                      Account security
+                    <Button variant="outline" render={<Link href="/dashboard" />}>
+                      Dashboard
+                    </Button>
+                    <Button variant="ghost" render={<Link href="/settings/profile" />}>
+                      Settings
                     </Button>
                     <Button
                       variant="ghost"

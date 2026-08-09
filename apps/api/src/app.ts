@@ -9,6 +9,7 @@ import { apiRateLimiter } from './middleware/rate-limit.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { notFoundHandler } from './middleware/not-found.js';
 import { apiRouter } from './routes/index.js';
+import { UPLOADS_DIR, UPLOADS_URL_PREFIX } from './services/storage.service.js';
 
 export function createApp(): Express {
   const app = express();
@@ -27,6 +28,15 @@ export function createApp(): Express {
 
   app.get('/health', (_req, res) =>
     res.status(200).json({ success: true, data: { status: 'ok' } }),
+  );
+
+  // Uploaded files (profile photos, etc.) — cross-origin readable since the web app runs on a
+  // different origin. Helmet's default same-origin CORP header is overridden just for this path.
+  app.use(
+    UPLOADS_URL_PREFIX,
+    express.static(UPLOADS_DIR, {
+      setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+    }),
   );
 
   app.use('/api/v1', apiRouter);
