@@ -1,33 +1,26 @@
 /**
  * Canonical Socket.IO event names shared by server emitters and client listeners.
- * Grouped by domain. Payload shapes are intentionally minimal in Phase 0 — the
- * live queue module will extend these once queue/token entities exist.
+ * Grouped by domain. Emitted by the Doctor Portal's REST mutation services (Phase 4)
+ * to the clinic room (`clinic:<clinicId>`) or a user's own room (`user:<userId>`).
  */
 export const SOCKET_EVENTS = {
-  QUEUE: {
-    UPDATED: 'queue.updated',
-    PAUSED: 'queue.paused',
-    RESUMED: 'queue.resumed',
-  },
-  TOKEN: {
-    CREATED: 'token.created',
-    CALLED: 'token.called',
-    SKIPPED: 'token.skipped',
-    COMPLETED: 'token.completed',
+  DOCTOR: {
+    STATUS_UPDATED: 'doctor.status.updated',
+    QUEUE_UPDATED: 'doctor.queue.updated',
+    SESSION_STARTED: 'doctor.session.started',
+    SESSION_PAUSED: 'doctor.session.paused',
+    SESSION_RESUMED: 'doctor.session.resumed',
   },
   PATIENT: {
-    CHECKED_IN: 'patient.checked_in',
-    NO_SHOW: 'patient.no_show',
-  },
-  DOCTOR: {
-    ARRIVED: 'doctor.arrived',
-    AVAILABLE: 'doctor.available',
-    DELAYED: 'doctor.delayed',
-    UNAVAILABLE: 'doctor.unavailable',
+    CALLED: 'patient.called',
+    SKIPPED: 'patient.skipped',
   },
   CONSULTATION: {
     STARTED: 'consultation.started',
     COMPLETED: 'consultation.completed',
+  },
+  QUEUE: {
+    UPDATED: 'queue.updated',
   },
   DELAY: {
     UPDATED: 'delay.updated',
@@ -35,15 +28,13 @@ export const SOCKET_EVENTS = {
   APPOINTMENT: {
     UPDATED: 'appointment.updated',
   },
-  ETA: {
-    UPDATED: 'eta.updated',
-  },
   NOTIFICATION: {
     CREATED: 'notification.created',
   },
 } as const;
 
-/** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization. */
+/** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization;
+ * every authenticated connection also auto-joins its own user room (`user:<userId>`). */
 export const SOCKET_NAMESPACES = {
   QUEUE: '/queue',
 } as const;

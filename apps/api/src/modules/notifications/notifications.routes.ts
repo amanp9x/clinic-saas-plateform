@@ -8,7 +8,8 @@ import { validate } from '../../middleware/validate.js';
 
 export const notificationsRouter = Router();
 
-notificationsRouter.use(authenticate, authorize(UserRole.PATIENT));
+// Generic on userId — reused unchanged by both the Patient and Doctor Portals.
+notificationsRouter.use(authenticate, authorize(UserRole.PATIENT, UserRole.DOCTOR));
 
 notificationsRouter.get(
   '/',

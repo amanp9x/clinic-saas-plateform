@@ -5,8 +5,11 @@ import { appointmentsRepository } from './appointments.repository.js';
 import { toAppointmentDetail, toAppointmentSummary } from './appointments.mappers.js';
 import { patientRepository } from '../patient/patient.repository.js';
 import { notifyUser } from '../notifications/notifications.service.js';
+import { queueRepository } from '../doctor-queue/queue.repository.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
+
+const DEFAULT_CONSULTATION_MINUTES = 15;
 
 const CANCELLABLE_STATUSES = new Set<AppointmentStatus>([
   AppointmentStatus.PENDING,
@@ -78,10 +81,10 @@ export const appointmentsService = {
   },
 
   /**
-   * Initial queue snapshot for a specific appointment. Always `isActive: false` — no live-queue
-   * module exists yet (it needs a receptionist dashboard to produce real state, which is out of
-   * scope for the Patient Portal). Once that module ships, this stays the same contract; only
-   * the values change. Real-time updates come from the existing Socket.IO `/queue` namespace.
+   * Live queue snapshot for a specific appointment, backed by the Doctor Portal's
+   * DoctorSession/QueueToken models (Phase 4). Falls back to an inactive snapshot when the
+   * doctor hasn't pulled this appointment into a queue session yet. Real-time updates come from
+   * the existing Socket.IO `/queue` namespace, which the Doctor Portal now actually emits to.
    */
   async getQueueView(userId: string, appointmentId: string): Promise<QueueViewDto> {
     const patientId = await resolvePatientId(userId);
@@ -93,22 +96,51 @@ export const appointmentsService = {
       throw new ConflictError('This appointment is not active');
     }
 
-    return {
+    const base = {
       appointmentId: appointment.id,
       doctorName: appointment.doctor.displayName,
       clinicName: appointment.clinic.name,
       clinicId: appointment.clinicId,
       appointmentTime: appointment.scheduledAt.toISOString(),
       patientToken: appointment.tokenNumber,
-      isActive: false,
-      currentToken: null,
-      patientsAhead: null,
-      estimatedWaitMinutes: null,
-      delayMinutes: null,
-      delayReason: null,
-      doctorStatus: null,
-      queueProgressPercent: null,
       lastUpdatedAt: new Date().toISOString(),
+    };
+
+    const token = await queueRepository.findTokenByAppointmentId(appointmentId);
+    if (!token) {
+      return {
+        ...base,
+        isActive: false,
+        currentToken: null,
+        patientsAhead: null,
+        estimatedWaitMinutes: null,
+        delayMinutes: null,
+        delayReason: null,
+        doctorStatus: null,
+        queueProgressPercent: null,
+      };
+    }
+
+    const session = token.doctorSession;
+    const [patientsAhead, totalTokens, completedCount, currentTokenRow] = await Promise.all([
+      token.status === 'WAITING' ? queueRepository.countWaitingAhead(session.id, token.tokenNumber) : Promise.resolve(0),
+      queueRepository.countTotalTokens(session.id),
+      queueRepository.countByStatus(session.id, 'COMPLETED'),
+      session.currentTokenId ? queueRepository.findToken(session.currentTokenId) : Promise.resolve(null),
+    ]);
+    const avgMinutes = session.averageConsultationMinutes ?? DEFAULT_CONSULTATION_MINUTES;
+
+    return {
+      ...base,
+      patientToken: appointment.tokenNumber ?? String(token.tokenNumber),
+      isActive: session.queueStatus === 'ACTIVE',
+      currentToken: currentTokenRow ? String(currentTokenRow.tokenNumber) : null,
+      patientsAhead: token.status === 'WAITING' ? patientsAhead : token.status === 'CALLED' ? 0 : null,
+      estimatedWaitMinutes: token.status === 'WAITING' ? patientsAhead * avgMinutes : token.status === 'CALLED' ? 0 : null,
+      delayMinutes: session.delayMinutes,
+      delayReason: session.delayReason,
+      doctorStatus: session.status,
+      queueProgressPercent: totalTokens > 0 ? Math.round((completedCount / totalTokens) * 100) : 0,
     };
   },
 

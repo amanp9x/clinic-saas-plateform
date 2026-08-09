@@ -163,8 +163,8 @@ export interface DashboardSummaryDto {
   unreadNotificationsCount: number;
 }
 
-/** Same honest "not started" contract as the Doctor Profile's queue status (Phase 2) —
- * no live-queue module exists yet, so `isActive` is always false until it does. */
+/** Backed by the Doctor Portal's live queue (Phase 4). `isActive: false` and null queue fields
+ * mean the doctor hasn't started today's queue session yet, not that the feature is missing. */
 export interface QueueViewDto {
   appointmentId: string;
   doctorName: string;

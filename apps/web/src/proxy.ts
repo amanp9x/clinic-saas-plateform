@@ -8,6 +8,7 @@ const PROTECTED_PREFIXES = [
   '/medical-records',
   '/notifications',
   '/settings',
+  '/doctor',
 ];
 
 /**
@@ -30,5 +31,13 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/appointments/:path*', '/queue/:path*', '/medical-records/:path*', '/notifications/:path*', '/settings/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/appointments/:path*',
+    '/queue/:path*',
+    '/medical-records/:path*',
+    '/notifications/:path*',
+    '/settings/:path*',
+    '/doctor/:path*',
+  ],
 };

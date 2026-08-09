@@ -8,12 +8,24 @@ import {
   MedicalRecordType,
   AddressLabel,
   NotificationType,
+  DoctorSessionStatus,
+  QueueStatus,
+  TokenStatus,
+  ConsultationStatus,
+  PrescriptionStatus,
+  FoodTiming,
+  LeaveType,
   type Doctor,
   type Clinic,
 } from '@prisma/client';
 import { slugify } from '../src/utils/slugify.js';
 import { hashPassword } from '../src/utils/password.js';
-import { DEMO_PATIENT_EMAIL, DEMO_PATIENT_PASSWORD } from './seed-constants.js';
+import {
+  DEMO_PATIENT_EMAIL,
+  DEMO_PATIENT_PASSWORD,
+  DEMO_DOCTOR_EMAIL,
+  DEMO_DOCTOR_PASSWORD,
+} from './seed-constants.js';
 
 const prisma = new PrismaClient();
 
@@ -780,6 +792,459 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
   }
 }
 
+function timeOf(hour: number, minute: number): Date {
+  return new Date(Date.UTC(1970, 0, 1, hour, minute, 0));
+}
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+const QUEUE_DEMO_PATIENTS = [
+  { fullName: 'Rahul Verma', email: 'rahul.verma@patients.example', gender: Gender.MALE, dateOfBirth: new Date('1988-04-12') },
+  { fullName: 'Sneha Joshi', email: 'sneha.joshi@patients.example', gender: Gender.FEMALE, dateOfBirth: new Date('1995-09-02') },
+  { fullName: 'Amit Desai', email: 'amit.desai@patients.example', gender: Gender.MALE, dateOfBirth: new Date('1979-01-25') },
+  { fullName: 'Priyanka Nair', email: 'priyanka.nair@patients.example', gender: Gender.FEMALE, dateOfBirth: new Date('2001-11-08') },
+  { fullName: 'Karan Malhotra', email: 'karan.malhotra@patients.example', gender: Gender.MALE, dateOfBirth: new Date('1966-06-30') },
+] as const;
+
+/**
+ * Seeds everything the Doctor Portal needs to render real data on first login for the demo
+ * doctor (Dr. Aditi Sharma / DEMO_DOCTOR_EMAIL): weekly availability, a leave date, a signature,
+ * a review response, and a fully-populated "today" queue session (waiting/called/completed
+ * tokens with real appointments, consultations, vitals, and a finalized prescription) plus a
+ * spread of historical completed appointments for earnings aggregation.
+ */
+async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]): Promise<void> {
+  const doctor = doctorRecords.find((d) => d.slug === 'dr-aditi-sharma');
+  const clinic = clinicRecords.find((c) => c.name === 'Sunrise Family Clinic');
+  if (!doctor || !clinic) return;
+
+  const clinicDoctor = await prisma.clinicDoctor.findUnique({
+    where: { clinicId_doctorId: { clinicId: clinic.id, doctorId: doctor.id } },
+  });
+  if (!clinicDoctor) return;
+
+  console.log('Seeding doctor availability, leave, and signature...');
+  const existingAvailability = await prisma.doctorAvailability.count({
+    where: { clinicDoctorId: clinicDoctor.id },
+  });
+  if (existingAvailability === 0) {
+    const weekdays = [Weekday.MON, Weekday.TUE, Weekday.WED, Weekday.THU, Weekday.FRI];
+    for (const weekday of weekdays) {
+      await prisma.doctorAvailability.createMany({
+        data: [
+          {
+            clinicDoctorId: clinicDoctor.id,
+            weekday,
+            startTime: timeOf(9, 0),
+            endTime: timeOf(13, 0),
+            consultationDurationMinutes: 15,
+          },
+          {
+            clinicDoctorId: clinicDoctor.id,
+            weekday,
+            startTime: timeOf(16, 0),
+            endTime: timeOf(20, 0),
+            consultationDurationMinutes: 15,
+          },
+        ],
+      });
+    }
+  }
+
+  const existingLeave = await prisma.doctorLeave.count({ where: { doctorId: doctor.id } });
+  if (existingLeave === 0) {
+    await prisma.doctorLeave.create({
+      data: {
+        doctorId: doctor.id,
+        clinicId: clinic.id,
+        startDate: daysFromNow(30),
+        endDate: daysFromNow(31),
+        reason: 'Personal leave',
+        type: LeaveType.LEAVE,
+      },
+    });
+  }
+
+  await prisma.doctorSignature.upsert({
+    where: { doctorId: doctor.id },
+    update: {},
+    create: { doctorId: doctor.id, signatureText: doctor.displayName },
+  });
+
+  const unrespondedReview = await prisma.doctorReview.findFirst({
+    where: { doctorId: doctor.id, response: null },
+  });
+  if (unrespondedReview) {
+    await prisma.doctorReview.update({
+      where: { id: unrespondedReview.id },
+      data: {
+        response: 'Thank you so much for the kind words — glad the visit went well!',
+        respondedAt: new Date(),
+      },
+    });
+  }
+
+  const existingSession = await prisma.doctorSession.findUnique({
+    where: {
+      doctorId_clinicId_sessionDate: {
+        doctorId: doctor.id,
+        clinicId: clinic.id,
+        sessionDate: startOfToday(),
+      },
+    },
+  });
+  if (existingSession) return;
+
+  console.log("Seeding doctor's queue demo patients and today's session...");
+  const queuePatients = await Promise.all(
+    QUEUE_DEMO_PATIENTS.map(async (p) => {
+      const user = await prisma.user.upsert({
+        where: { email: p.email },
+        update: {},
+        create: { email: p.email, role: UserRole.PATIENT, isEmailVerified: true, isActive: true },
+      });
+      return prisma.patient.upsert({
+        where: { userId: user.id },
+        update: {},
+        create: { userId: user.id, fullName: p.fullName, dateOfBirth: p.dateOfBirth, gender: p.gender },
+      });
+    }),
+  );
+  const [p1, p2, p3, p4, p5] = queuePatients as [
+    (typeof queuePatients)[0],
+    (typeof queuePatients)[0],
+    (typeof queuePatients)[0],
+    (typeof queuePatients)[0],
+    (typeof queuePatients)[0],
+  ];
+
+  const appt1 = await prisma.appointment.create({
+    data: {
+      patientId: p1.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(0, 9, 0),
+      status: AppointmentStatus.COMPLETED,
+      completedAt: daysFromNow(0, 9, 13),
+      tokenNumber: '1',
+      reasonForVisit: 'Chest discomfort on exertion for 2 weeks',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  const appt2 = await prisma.appointment.create({
+    data: {
+      patientId: p2.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(0, 9, 15),
+      status: AppointmentStatus.COMPLETED,
+      completedAt: daysFromNow(0, 9, 27),
+      tokenNumber: '2',
+      reasonForVisit: 'Blood pressure follow-up',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  const appt3 = await prisma.appointment.create({
+    data: {
+      patientId: p3.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(0, 9, 30),
+      status: AppointmentStatus.CHECKED_IN,
+      tokenNumber: '3',
+      reasonForVisit: 'Palpitations',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  const appt4 = await prisma.appointment.create({
+    data: {
+      patientId: p4.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(0, 9, 45),
+      status: AppointmentStatus.CONFIRMED,
+      tokenNumber: '4',
+      reasonForVisit: 'Annual cardiac screening',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  const appt5 = await prisma.appointment.create({
+    data: {
+      patientId: p5.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(0, 10, 0),
+      status: AppointmentStatus.CONFIRMED,
+      tokenNumber: '5',
+      reasonForVisit: 'Post-angioplasty review',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+
+  const session = await prisma.doctorSession.create({
+    data: {
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      sessionDate: startOfToday(),
+      status: DoctorSessionStatus.AVAILABLE,
+      queueStatus: QueueStatus.ACTIVE,
+      startedAt: daysFromNow(0, 9, 0),
+      averageConsultationMinutes: 13,
+    },
+  });
+
+  const token1 = await prisma.queueToken.create({
+    data: {
+      doctorSessionId: session.id,
+      appointmentId: appt1.id,
+      patientId: p1.id,
+      tokenNumber: 1,
+      status: TokenStatus.COMPLETED,
+      calledAt: daysFromNow(0, 9, 0),
+      startedAt: daysFromNow(0, 9, 1),
+      completedAt: daysFromNow(0, 9, 13),
+    },
+  });
+  const token2 = await prisma.queueToken.create({
+    data: {
+      doctorSessionId: session.id,
+      appointmentId: appt2.id,
+      patientId: p2.id,
+      tokenNumber: 2,
+      status: TokenStatus.COMPLETED,
+      calledAt: daysFromNow(0, 9, 15),
+      startedAt: daysFromNow(0, 9, 16),
+      completedAt: daysFromNow(0, 9, 27),
+    },
+  });
+  const token3 = await prisma.queueToken.create({
+    data: {
+      doctorSessionId: session.id,
+      appointmentId: appt3.id,
+      patientId: p3.id,
+      tokenNumber: 3,
+      status: TokenStatus.CALLED,
+      calledAt: daysFromNow(0, 9, 30),
+      calledCount: 1,
+    },
+  });
+  await prisma.queueToken.create({
+    data: { doctorSessionId: session.id, appointmentId: appt4.id, patientId: p4.id, tokenNumber: 4 },
+  });
+  await prisma.queueToken.create({
+    data: { doctorSessionId: session.id, appointmentId: appt5.id, patientId: p5.id, tokenNumber: 5 },
+  });
+  await prisma.doctorSession.update({ where: { id: session.id }, data: { currentTokenId: token3.id } });
+
+  const consultation1 = await prisma.consultation.create({
+    data: {
+      appointmentId: appt1.id,
+      doctorId: doctor.id,
+      patientId: p1.id,
+      clinicId: clinic.id,
+      tokenId: token1.id,
+      status: ConsultationStatus.COMPLETED,
+      chiefComplaint: 'Chest discomfort on exertion for 2 weeks',
+      symptoms: ['Chest tightness', 'Shortness of breath on exertion'],
+      heightCm: 172,
+      weightKg: 78,
+      temperatureC: 36.8,
+      bloodPressureSystolic: 128,
+      bloodPressureDiastolic: 82,
+      pulseRate: 76,
+      respiratoryRate: 16,
+      spo2: 98,
+      diagnosis: 'Stable angina, well controlled',
+      doctorNotes: 'ECG unremarkable. Continue current medication, reassess in 4 weeks.',
+      treatmentPlan: 'Continue Atorvastatin, add low-dose Aspirin.',
+      followUpDate: daysFromNow(28),
+      startedAt: daysFromNow(0, 9, 1),
+      completedAt: daysFromNow(0, 9, 13),
+    },
+  });
+  await prisma.consultation.create({
+    data: {
+      appointmentId: appt2.id,
+      doctorId: doctor.id,
+      patientId: p2.id,
+      clinicId: clinic.id,
+      tokenId: token2.id,
+      status: ConsultationStatus.COMPLETED,
+      chiefComplaint: 'Routine blood pressure follow-up',
+      symptoms: [],
+      heightCm: 160,
+      weightKg: 65,
+      temperatureC: 36.6,
+      bloodPressureSystolic: 132,
+      bloodPressureDiastolic: 85,
+      pulseRate: 80,
+      respiratoryRate: 15,
+      spo2: 99,
+      diagnosis: 'Hypertension, moderately controlled',
+      doctorNotes: 'BP trending better; keep monitoring at home.',
+      treatmentPlan: 'Continue Amlodipine 5mg.',
+      followUpDate: daysFromNow(30),
+      startedAt: daysFromNow(0, 9, 16),
+      completedAt: daysFromNow(0, 9, 27),
+    },
+  });
+
+  await prisma.vitalRecord.create({
+    data: {
+      patientId: p1.id,
+      recordedAt: daysFromNow(0, 9, 13),
+      heightCm: 172,
+      weightKg: 78,
+      bloodPressureSystolic: 128,
+      bloodPressureDiastolic: 82,
+      heartRateBpm: 76,
+      temperatureCelsius: 36.8,
+    },
+  });
+  await prisma.medicalRecord.create({
+    data: {
+      patientId: p1.id,
+      doctorId: doctor.id,
+      recordType: MedicalRecordType.CONSULTATION_NOTE,
+      title: 'Cardiology consultation',
+      description: 'Stable angina, well controlled. Continue current medication.',
+      recordDate: daysFromNow(0, 9, 13),
+      doctorName: doctor.displayName,
+    },
+  });
+  await prisma.vitalRecord.create({
+    data: {
+      patientId: p2.id,
+      recordedAt: daysFromNow(0, 9, 27),
+      heightCm: 160,
+      weightKg: 65,
+      bloodPressureSystolic: 132,
+      bloodPressureDiastolic: 85,
+      heartRateBpm: 80,
+      temperatureCelsius: 36.6,
+    },
+  });
+  await prisma.medicalRecord.create({
+    data: {
+      patientId: p2.id,
+      doctorId: doctor.id,
+      recordType: MedicalRecordType.CONSULTATION_NOTE,
+      title: 'Cardiology follow-up',
+      description: 'Hypertension, moderately controlled.',
+      recordDate: daysFromNow(0, 9, 27),
+      doctorName: doctor.displayName,
+    },
+  });
+
+  const prescription = await prisma.prescription.create({
+    data: {
+      patientId: p1.id,
+      doctorId: doctor.id,
+      appointmentId: appt1.id,
+      consultationId: consultation1.id,
+      issuedAt: daysFromNow(0, 9, 13),
+      medications: [],
+      status: PrescriptionStatus.FINALIZED,
+      diagnosis: 'Stable angina',
+      advice: 'Low-salt diet, moderate exercise, avoid strenuous activity until follow-up.',
+      followUpDate: daysFromNow(28),
+      labTestRecommendation: ['Lipid Profile', 'ECG'],
+      signedAt: daysFromNow(0, 9, 13),
+    },
+  });
+  await prisma.prescriptionItem.createMany({
+    data: [
+      {
+        prescriptionId: prescription.id,
+        sortOrder: 0,
+        medicineName: 'Atorvastatin',
+        dosage: '10mg',
+        frequency: 'Once daily',
+        duration: '30 days',
+        route: 'Oral',
+        instructions: 'Take at night',
+        beforeAfterFood: FoodTiming.AFTER_FOOD,
+        quantity: '30 tablets',
+      },
+      {
+        prescriptionId: prescription.id,
+        sortOrder: 1,
+        medicineName: 'Aspirin',
+        dosage: '75mg',
+        frequency: 'Once daily',
+        duration: '30 days',
+        route: 'Oral',
+        instructions: 'Take after breakfast',
+        beforeAfterFood: FoodTiming.AFTER_FOOD,
+        quantity: '30 tablets',
+      },
+    ],
+  });
+
+  console.log("Seeding doctor's historical appointments for earnings...");
+  await prisma.appointment.create({
+    data: {
+      patientId: p3.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(-2, 11, 0),
+      status: AppointmentStatus.COMPLETED,
+      completedAt: daysFromNow(-2, 11, 20),
+      reasonForVisit: 'Routine checkup',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  await prisma.appointment.create({
+    data: {
+      patientId: p4.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(-10, 12, 0),
+      status: AppointmentStatus.COMPLETED,
+      completedAt: daysFromNow(-10, 12, 15),
+      reasonForVisit: 'Follow-up',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  await prisma.appointment.create({
+    data: {
+      patientId: p5.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(-20, 9, 0),
+      status: AppointmentStatus.COMPLETED,
+      completedAt: daysFromNow(-20, 9, 20),
+      reasonForVisit: 'Consultation',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+  await prisma.appointment.create({
+    data: {
+      patientId: p3.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(-3, 10, 0),
+      status: AppointmentStatus.NO_SHOW,
+      reasonForVisit: 'Skin check',
+    },
+  });
+  await prisma.appointment.create({
+    data: {
+      patientId: p2.id,
+      doctorId: doctor.id,
+      clinicId: clinic.id,
+      scheduledAt: daysFromNow(3, 15, 0),
+      status: AppointmentStatus.CONFIRMED,
+      reasonForVisit: 'Post-treatment review',
+      consultationFee: doctor.consultationFee,
+    },
+  });
+}
+
 async function main() {
   console.log('Seeding specializations...');
   const specializationRecords = await Promise.all(
@@ -849,16 +1314,19 @@ async function main() {
   ];
 
   const doctorRecords: Awaited<ReturnType<typeof prisma.doctor.upsert>>[] = [];
+  const demoDoctorPasswordHash = await hashPassword(DEMO_DOCTOR_PASSWORD);
 
   for (let i = 0; i < DOCTORS.length; i++) {
     const d = DOCTORS[i]!;
     const specialization = specializationByName.get(d.specialization);
+    const isDemoDoctor = d.email === DEMO_DOCTOR_EMAIL;
 
     const user = await prisma.user.upsert({
       where: { email: d.email },
-      update: {},
+      update: isDemoDoctor ? { passwordHash: demoDoctorPasswordHash } : {},
       create: {
         email: d.email,
+        passwordHash: isDemoDoctor ? demoDoctorPasswordHash : undefined,
         role: UserRole.DOCTOR,
         isEmailVerified: true,
         isActive: true,
@@ -920,6 +1388,9 @@ async function main() {
 
   console.log('Seeding demo patient...');
   await seedDemoPatient(doctorRecords, clinicRecords);
+
+  console.log('Seeding doctor portal demo data...');
+  await seedDoctorPortal(doctorRecords, clinicRecords);
 
   console.log('Seeding testimonials...');
   const existingTestimonials = await prisma.testimonial.count();

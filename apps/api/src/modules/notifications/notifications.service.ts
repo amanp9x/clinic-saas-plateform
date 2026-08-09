@@ -1,10 +1,13 @@
 import { NotificationType } from '@prisma/client';
+import { SOCKET_EVENTS } from '@clinic/shared';
 import type { NotificationListQuery, NotificationPreferenceInput, PaginatedResult } from '@clinic/shared';
 import type { NotificationDto } from '@clinic/shared';
 import { notificationsRepository } from './notifications.repository.js';
 import { DEFAULT_PREFERENCE_DTO, toNotificationDto, toPreferenceDto } from './notifications.mappers.js';
+import { emitToUserRoom } from '../../sockets/emit.js';
 
-/** Reusable by any module that needs to notify a patient (currently: appointment cancellation). */
+/** Reusable by any module that needs to notify a user (patient or doctor). Persists the
+ * notification and broadcasts it live to that user's own Socket.IO room. */
 export async function notifyUser(input: {
   userId: string;
   type: NotificationType;
@@ -13,7 +16,8 @@ export async function notifyUser(input: {
   relatedEntityType?: string;
   relatedEntityId?: string;
 }): Promise<void> {
-  await notificationsRepository.create(input);
+  const notification = await notificationsRepository.create(input);
+  emitToUserRoom(input.userId, SOCKET_EVENTS.NOTIFICATION.CREATED, toNotificationDto(notification));
 }
 
 export const notificationsService = {

@@ -99,6 +99,65 @@ enum NotificationChannel {
   NONE
 }
 
+/// Doctor's manually-set availability/session status for a clinic session on a given day.
+/// Staff-controlled, never inferred. IN_CONSULTATION is set automatically by the consultation
+/// module; NOT_ARRIVED/ARRIVED are reserved for a future reception check-in flow.
+enum DoctorSessionStatus {
+  NOT_ARRIVED
+  ARRIVED
+  AVAILABLE
+  IN_CONSULTATION
+  ON_BREAK
+  DELAYED
+  UNAVAILABLE
+  SESSION_ENDED
+}
+
+enum QueueStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+enum TokenStatus {
+  WAITING
+  CALLED
+  IN_CONSULTATION
+  COMPLETED
+  SKIPPED
+  NO_SHOW
+  CANCELLED
+}
+
+enum TokenType {
+  SCHEDULED
+  WALK_IN
+  EMERGENCY
+}
+
+enum ConsultationStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PrescriptionStatus {
+  DRAFT
+  FINALIZED
+}
+
+enum FoodTiming {
+  BEFORE_FOOD
+  AFTER_FOOD
+  WITH_FOOD
+  ANYTIME
+}
+
+enum LeaveType {
+  LEAVE
+  HOLIDAY
+}
+
 // ---------------------------------------------------------------------------
 // Identity & Auth
 // ---------------------------------------------------------------------------
@@ -209,9 +268,11 @@ model Clinic {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  doctors      ClinicDoctor[]
-  staff        ClinicStaffMember[]
-  appointments Appointment[]
+  doctors        ClinicDoctor[]
+  staff          ClinicStaffMember[]
+  appointments   Appointment[]
+  doctorSessions DoctorSession[]
+  doctorLeaves   DoctorLeave[]
 
   @@index([slug])
   @@index([city])
@@ -283,12 +344,17 @@ model Doctor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  specialization Specialization? @relation(fields: [specializationId], references: [id], onDelete: SetNull)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization Specialization?  @relation(fields: [specializationId], references: [id], onDelete: SetNull)
   clinics        ClinicDoctor[]
   reviews        DoctorReview[]
   appointments   Appointment[]
   prescriptions  Prescription[]
+  sessions       DoctorSession[]
+  leaves         DoctorLeave[]
+  signature      DoctorSignature?
+  medicalRecords MedicalRecord[]
+  consultations  Consultation[]
 
   @@index([slug])
   @@index([specializationId])
@@ -298,17 +364,24 @@ model Doctor {
 
 /// Many-to-many: a doctor can practice at multiple clinics, with per-clinic timings.
 model ClinicDoctor {
-  id            String    @id @default(uuid())
-  clinicId      String
-  doctorId      String
-  isActive      Boolean   @default(true)
-  timings       String?
-  availableDays Weekday[]
+  id                                  String    @id @default(uuid())
+  clinicId                            String
+  doctorId                            String
+  isActive                            Boolean   @default(true)
+  timings                             String?
+  availableDays                       Weekday[]
+  consultationFeeOverride             Decimal?  @db.Decimal(10, 2)
+  consultationDurationMinutesOverride Int?
+  isAcceptingAppointments             Boolean   @default(true)
+  /// Grants this doctor permission to override the receptionist's manual delay controls for
+  /// this clinic (spec: doctor is read-only on delay by default, "unless authorized by clinic permissions").
+  canOverrideDelay                    Boolean   @default(false)
 
   createdAt DateTime @default(now())
 
-  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic       Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor       Doctor               @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  availability DoctorAvailability[]
 
   @@unique([clinicId, doctorId])
   @@index([doctorId])
@@ -316,17 +389,201 @@ model ClinicDoctor {
 }
 
 model DoctorReview {
-  id         String   @id @default(uuid())
-  doctorId   String
-  authorName String
-  rating     Int
-  comment    String
-  createdAt  DateTime @default(now())
+  id          String    @id @default(uuid())
+  doctorId    String
+  authorName  String
+  rating      Int
+  comment     String
+  response    String?
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
 
   doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
 
   @@index([doctorId])
   @@map("doctor_reviews")
+}
+
+/// Recurring weekly availability template for a doctor at a specific clinic. Multiple rows with
+/// the same weekday support multiple sessions per day (e.g. morning + evening).
+model DoctorAvailability {
+  id                          String    @id @default(uuid())
+  clinicDoctorId              String
+  weekday                     Weekday
+  startTime                   DateTime  @db.Time
+  endTime                     DateTime  @db.Time
+  consultationDurationMinutes Int
+  breakStartTime              DateTime? @db.Time
+  breakEndTime                DateTime? @db.Time
+  isActive                    Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinicDoctor ClinicDoctor @relation(fields: [clinicDoctorId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicDoctorId, weekday, startTime])
+  @@index([clinicDoctorId])
+  @@map("doctor_availability")
+}
+
+/// A leave or holiday date range for a doctor. `clinicId = null` means unavailable at all clinics.
+model DoctorLeave {
+  id        String    @id @default(uuid())
+  doctorId  String
+  clinicId  String?
+  startDate DateTime  @db.Date
+  endDate   DateTime  @db.Date
+  reason    String?
+  type      LeaveType @default(LEAVE)
+
+  createdAt DateTime @default(now())
+
+  doctor Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, startDate, endDate])
+  @@map("doctor_leaves")
+}
+
+/// One doctor's live status + queue container for a specific clinic on a specific day.
+/// Per-(doctor, clinic, day) because a doctor can hold different statuses at different clinics
+/// concurrently, and dashboards/audit need "today" distinguished from history.
+model DoctorSession {
+  id                         String              @id @default(uuid())
+  doctorId                   String
+  clinicId                   String
+  sessionDate                DateTime            @db.Date
+  status                     DoctorSessionStatus @default(NOT_ARRIVED)
+  queueStatus                QueueStatus         @default(CLOSED)
+  startedAt                  DateTime?
+  endedAt                    DateTime?
+  currentTokenId             String?
+  averageConsultationMinutes Int?
+  delayMinutes               Int?
+  delayReason                String?
+  delayUpdatedAt             DateTime?
+  delayUpdatedBy             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  tokens QueueToken[]
+
+  @@unique([doctorId, clinicId, sessionDate])
+  @@index([clinicId, sessionDate])
+  @@index([status])
+  @@map("doctor_sessions")
+}
+
+/// A single patient's position in a doctor's live queue for a given session.
+model QueueToken {
+  id              String      @id @default(uuid())
+  doctorSessionId String
+  appointmentId   String?     @unique
+  patientId       String
+  tokenNumber     Int
+  type            TokenType   @default(SCHEDULED)
+  status          TokenStatus @default(WAITING)
+  calledAt        DateTime?
+  calledCount     Int         @default(0)
+  startedAt       DateTime?
+  completedAt     DateTime?
+  skipReason      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctorSession DoctorSession @relation(fields: [doctorSessionId], references: [id], onDelete: Cascade)
+  appointment   Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patient       Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultation  Consultation?
+
+  @@unique([doctorSessionId, tokenNumber])
+  @@index([doctorSessionId, status])
+  @@index([patientId])
+  @@map("queue_tokens")
+}
+
+/// The durable clinical record for one appointment. 1:1 with Appointment.
+model Consultation {
+  id                     String             @id @default(uuid())
+  appointmentId          String             @unique
+  doctorId               String
+  patientId              String
+  clinicId               String
+  tokenId                String?            @unique
+  status                 ConsultationStatus @default(NOT_STARTED)
+  chiefComplaint         String?
+  symptoms               String[]
+  heightCm               Float?
+  weightKg               Float?
+  temperatureC           Float?
+  bloodPressureSystolic  Int?
+  bloodPressureDiastolic Int?
+  pulseRate              Int?
+  respiratoryRate        Int?
+  spo2                   Int?
+  diagnosis              String?
+  doctorNotes            String?
+  treatmentPlan          String?
+  followUpDate           DateTime?
+  startedAt              DateTime?
+  completedAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment   Appointment    @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  token         QueueToken?    @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  prescriptions Prescription[]
+
+  @@index([doctorId, status])
+  @@index([patientId])
+  @@map("consultations")
+}
+
+/// A single medicine line item on a prescription.
+model PrescriptionItem {
+  id              String      @id @default(uuid())
+  prescriptionId  String
+  sortOrder       Int
+  medicineName    String
+  dosage          String
+  frequency       String
+  duration        String
+  route           String?
+  instructions    String?
+  beforeAfterFood FoodTiming?
+  quantity        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+/// Reusable signature asset stamped onto a doctor's finalized prescriptions.
+/// Architecture only — no PKI/certificate-based e-signing.
+model DoctorSignature {
+  id                String  @id @default(uuid())
+  doctorId          String  @unique
+  signatureImageUrl String?
+  signatureText     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@map("doctor_signatures")
 }
 
 model Testimonial {
@@ -401,6 +658,8 @@ model Patient {
   vaccinations   Vaccination[]
   vitalRecords   VitalRecord[]
   medicalRecords MedicalRecord[]
+  queueTokens    QueueToken[]
+  consultations  Consultation[]
 
   @@map("patients")
 }
@@ -452,6 +711,8 @@ model Appointment {
   clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   prescriptions Prescription[]
   labReports    LabReport[]
+  queueToken    QueueToken?
+  consultation  Consultation?
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -460,22 +721,38 @@ model Appointment {
 }
 
 model Prescription {
-  id            String   @id @default(uuid())
-  patientId     String
-  doctorId      String
-  appointmentId String?
-  issuedAt      DateTime @default(now())
-  medications   Json
-  notes         String?
-  fileUrl       String?
+  id                    String             @id @default(uuid())
+  patientId             String
+  doctorId              String
+  appointmentId         String?
+  consultationId        String?
+  issuedAt              DateTime           @default(now())
+  /// @deprecated superseded by the structured `items` relation; kept for legacy rows only.
+  medications           Json
+  status                PrescriptionStatus @default(DRAFT)
+  diagnosis             String?
+  advice                String?
+  followUpDate          DateTime?
+  labTestRecommendation String[]
+  notes                 String?
+  fileUrl               String?
+  signedAt              DateTime?
+  signatureImageUrl     String?
+  signatureHash         String?
+  pdfUrl                String?
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
-  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patient      Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointment  Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  consultation Consultation?      @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  items        PrescriptionItem[]
 
   @@index([patientId, issuedAt])
+  @@index([consultationId])
+  @@index([status])
   @@map("prescriptions")
 }
 
@@ -542,6 +819,9 @@ model VitalRecord {
 model MedicalRecord {
   id            String            @id @default(uuid())
   patientId     String
+  /// Nullable: legacy/manually-entered records may only have a free-text doctorName. Records
+  /// authored through the Doctor Portal's consultation workflow set both this FK and doctorName.
+  doctorId      String?
   recordType    MedicalRecordType
   title         String
   description   String?
@@ -552,8 +832,10 @@ model MedicalRecord {
   createdAt DateTime @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)
 
   @@index([patientId, recordDate])
+  @@index([doctorId])
   @@map("medical_records")
 }
 

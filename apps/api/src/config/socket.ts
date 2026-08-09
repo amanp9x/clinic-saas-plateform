@@ -4,6 +4,7 @@ import { SOCKET_NAMESPACES } from '@clinic/shared';
 import { env } from './env.js';
 import { socketAuthMiddleware } from '../sockets/socket-auth.js';
 import { registerQueueHandlers } from '../sockets/queue.socket.js';
+import { setQueueNamespace } from '../sockets/emit.js';
 
 export function createSocketServer(httpServer: HttpServer): SocketIOServer {
   const io = new SocketIOServer(httpServer, {
@@ -13,6 +14,7 @@ export function createSocketServer(httpServer: HttpServer): SocketIOServer {
   const queueNamespace = io.of(SOCKET_NAMESPACES.QUEUE);
   queueNamespace.use(socketAuthMiddleware);
   registerQueueHandlers(queueNamespace);
+  setQueueNamespace(queueNamespace);
 
   return io;
 }

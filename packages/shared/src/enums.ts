@@ -78,6 +78,33 @@ export const AuthProvider = {
 } as const;
 export type AuthProvider = (typeof AuthProvider)[keyof typeof AuthProvider];
 
+export const ConsultationStatus = {
+  NOT_STARTED: 'NOT_STARTED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  COMPLETED: 'COMPLETED',
+} as const;
+export type ConsultationStatus = (typeof ConsultationStatus)[keyof typeof ConsultationStatus];
+
+export const PrescriptionStatus = {
+  DRAFT: 'DRAFT',
+  FINALIZED: 'FINALIZED',
+} as const;
+export type PrescriptionStatus = (typeof PrescriptionStatus)[keyof typeof PrescriptionStatus];
+
+export const FoodTiming = {
+  BEFORE_FOOD: 'BEFORE_FOOD',
+  AFTER_FOOD: 'AFTER_FOOD',
+  WITH_FOOD: 'WITH_FOOD',
+  ANYTIME: 'ANYTIME',
+} as const;
+export type FoodTiming = (typeof FoodTiming)[keyof typeof FoodTiming];
+
+export const LeaveType = {
+  LEAVE: 'LEAVE',
+  HOLIDAY: 'HOLIDAY',
+} as const;
+export type LeaveType = (typeof LeaveType)[keyof typeof LeaveType];
+
 export const Gender = {
   MALE: 'MALE',
   FEMALE: 'FEMALE',

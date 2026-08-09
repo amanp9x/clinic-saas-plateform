@@ -5,6 +5,8 @@ export * from './error-codes.js';
 export * from './types/auth.js';
 export * from './types/catalog.js';
 export * from './types/patient.js';
+export * from './types/doctor.js';
 export * from './validation/auth.js';
 export * from './validation/catalog.js';
 export * from './validation/patient.js';
+export * from './validation/doctor.js';
