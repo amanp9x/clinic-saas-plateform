@@ -9,6 +9,7 @@ const PROTECTED_PREFIXES = [
   '/notifications',
   '/settings',
   '/doctor',
+  '/reception',
 ];
 
 /**
@@ -39,5 +40,6 @@ export const config = {
     '/notifications/:path*',
     '/settings/:path*',
     '/doctor/:path*',
+    '/reception/:path*',
   ],
 };

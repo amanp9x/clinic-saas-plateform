@@ -1,6 +1,6 @@
 import type { Clinic, DoctorSession } from '@prisma/client';
 import type { QueueSnapshotDto, QueueTokenDto } from '@clinic/shared';
-import type { TokenWithPatient } from './queue.repository.js';
+import { sortByQueueOrder, type TokenWithPatient } from './queue.repository.js';
 
 export function toTokenDto(token: TokenWithPatient): QueueTokenDto {
   return {
@@ -16,6 +16,7 @@ export function toTokenDto(token: TokenWithPatient): QueueTokenDto {
     startedAt: token.startedAt ? token.startedAt.toISOString() : null,
     completedAt: token.completedAt ? token.completedAt.toISOString() : null,
     skipReason: token.skipReason,
+    priority: token.priority,
   };
 }
 
@@ -36,7 +37,7 @@ export function toQueueSnapshot(
     };
   }
 
-  const waitingTokens = session.tokens.filter((t) => t.status === 'WAITING').map(toTokenDto);
+  const waitingTokens = sortByQueueOrder(session.tokens.filter((t) => t.status === 'WAITING')).map(toTokenDto);
   const calledTokens = session.tokens.filter((t) => t.status === 'CALLED').map(toTokenDto);
   const currentToken = session.currentTokenId
     ? toTokenDto(session.tokens.find((t) => t.id === session.currentTokenId) ?? session.tokens[0]!)

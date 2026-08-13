@@ -1,4 +1,4 @@
-import { MedicalRecordType } from '@prisma/client';
+import { MedicalRecordType, type Consultation } from '@prisma/client';
 import { SOCKET_EVENTS } from '@clinic/shared';
 import type { ConsultationDto, ConsultationUpsertInput } from '@clinic/shared';
 import { consultationRepository } from './consultation.repository.js';
@@ -28,44 +28,19 @@ function toNullable(value: string | undefined): string | null | undefined {
   return value === '' ? null : value;
 }
 
-export const consultationService = {
-  async get(userId: string, appointmentId: string): Promise<ConsultationDto> {
-    const doctor = await resolveDoctorOrThrow(userId);
-    const { consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
-    return toConsultationDto(consultation);
-  },
-
-  async upsert(userId: string, appointmentId: string, input: ConsultationUpsertInput): Promise<ConsultationDto> {
-    const doctor = await resolveDoctorOrThrow(userId);
-    const { consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
-    if (consultation.status === 'COMPLETED') {
-      throw new ConflictError('This consultation has already been completed and cannot be edited');
-    }
-
-    const updated = await consultationRepository.update(appointmentId, {
-      chiefComplaint: toNullable(input.chiefComplaint),
-      symptoms: input.symptoms,
-      heightCm: input.vitals?.heightCm,
-      weightKg: input.vitals?.weightKg,
-      temperatureC: input.vitals?.temperatureC,
-      bloodPressureSystolic: input.vitals?.bloodPressureSystolic,
-      bloodPressureDiastolic: input.vitals?.bloodPressureDiastolic,
-      pulseRate: input.vitals?.pulseRate,
-      respiratoryRate: input.vitals?.respiratoryRate,
-      spo2: input.vitals?.spo2,
-      diagnosis: toNullable(input.diagnosis),
-      doctorNotes: toNullable(input.doctorNotes),
-      treatmentPlan: toNullable(input.treatmentPlan),
-      followUpDate: input.followUpDate === undefined ? undefined : input.followUpDate ? new Date(input.followUpDate) : null,
-    });
-
-    recordAuditLog({ actorUserId: userId, action: 'doctor.consultation_updated', entityType: 'Consultation', entityId: updated.id });
-    return toConsultationDto(updated);
-  },
-
-  async complete(userId: string, appointmentId: string): Promise<ConsultationDto> {
-    const doctor = await resolveDoctorOrThrow(userId);
-    const { appointment, consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
+/**
+ * Doctor-scoped consultation-completion core, parameterized by already-resolved doctor/
+ * appointment/consultation records so the reception queue console's "mark completed" action
+ * can trigger the exact same vitals/medical-record/average-duration cascade instead of
+ * re-implementing it.
+ */
+export const consultationEngine = {
+  async complete(
+    doctor: { id: string; displayName: string },
+    appointment: { id: string; clinicId: string },
+    consultation: Consultation,
+    actorUserId: string,
+  ): Promise<ConsultationDto> {
     if (consultation.status !== 'IN_PROGRESS') {
       throw new ConflictError(`A consultation with status ${consultation.status} cannot be completed`);
     }
@@ -77,11 +52,11 @@ export const consultationService = {
 
     const [updatedConsultation] = await prisma.$transaction([
       prisma.consultation.update({
-        where: { appointmentId },
+        where: { appointmentId: appointment.id },
         data: { status: 'COMPLETED', completedAt },
       }),
       prisma.appointment.update({
-        where: { id: appointmentId },
+        where: { id: appointment.id },
         data: { status: 'COMPLETED', completedAt },
       }),
       ...(token
@@ -145,11 +120,56 @@ export const consultationService = {
       });
     }
 
-    recordAuditLog({ actorUserId: userId, action: 'doctor.consultation_completed', entityType: 'Consultation', entityId: updatedConsultation.id });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.COMPLETED, { appointmentId, clinicId: appointment.clinicId });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId, clinicId: appointment.clinicId, status: 'COMPLETED' });
+    recordAuditLog({ actorUserId, action: 'queue.consultation_completed', entityType: 'Consultation', entityId: updatedConsultation.id, clinicId: appointment.clinicId, metadata: { doctorId: doctor.id } });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.COMPLETED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.COMPLETED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: 'COMPLETED' });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
 
     return toConsultationDto(updatedConsultation);
   },
 };
+
+export const consultationService = {
+  async get(userId: string, appointmentId: string): Promise<ConsultationDto> {
+    const doctor = await resolveDoctorOrThrow(userId);
+    const { consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
+    return toConsultationDto(consultation);
+  },
+
+  async upsert(userId: string, appointmentId: string, input: ConsultationUpsertInput): Promise<ConsultationDto> {
+    const doctor = await resolveDoctorOrThrow(userId);
+    const { consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
+    if (consultation.status === 'COMPLETED') {
+      throw new ConflictError('This consultation has already been completed and cannot be edited');
+    }
+
+    const updated = await consultationRepository.update(appointmentId, {
+      chiefComplaint: toNullable(input.chiefComplaint),
+      symptoms: input.symptoms,
+      heightCm: input.vitals?.heightCm,
+      weightKg: input.vitals?.weightKg,
+      temperatureC: input.vitals?.temperatureC,
+      bloodPressureSystolic: input.vitals?.bloodPressureSystolic,
+      bloodPressureDiastolic: input.vitals?.bloodPressureDiastolic,
+      pulseRate: input.vitals?.pulseRate,
+      respiratoryRate: input.vitals?.respiratoryRate,
+      spo2: input.vitals?.spo2,
+      diagnosis: toNullable(input.diagnosis),
+      doctorNotes: toNullable(input.doctorNotes),
+      treatmentPlan: toNullable(input.treatmentPlan),
+      followUpDate: input.followUpDate === undefined ? undefined : input.followUpDate ? new Date(input.followUpDate) : null,
+    });
+
+    recordAuditLog({ actorUserId: userId, action: 'doctor.consultation_updated', entityType: 'Consultation', entityId: updated.id });
+    return toConsultationDto(updated);
+  },
+
+  async complete(userId: string, appointmentId: string): Promise<ConsultationDto> {
+    const doctor = await resolveDoctorOrThrow(userId);
+    const { appointment, consultation } = await requireOwnedConsultation(doctor.id, appointmentId);
+    return consultationEngine.complete(doctor, appointment, consultation, userId);
+  },
+};
+
+export { requireOwnedConsultation };

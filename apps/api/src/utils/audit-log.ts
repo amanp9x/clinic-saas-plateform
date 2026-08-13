@@ -7,6 +7,9 @@ interface RecordAuditLogInput {
   action: string;
   entityType: string;
   entityId?: string;
+  /** Denormalized clinic scope, so "queue history for clinic X" is a direct filtered query
+   * instead of a join through entityId. Omit for non-clinic-scoped actions (auth, profile edits). */
+  clinicId?: string;
   metadata?: Prisma.InputJsonValue;
   ipAddress?: string;
 }
@@ -20,6 +23,7 @@ export function recordAuditLog(input: RecordAuditLogInput): void {
         action: input.action,
         entityType: input.entityType,
         entityId: input.entityId,
+        clinicId: input.clinicId,
         metadata: input.metadata,
         ipAddress: input.ipAddress,
       },

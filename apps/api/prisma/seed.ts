@@ -18,6 +18,7 @@ import {
   type Doctor,
   type Clinic,
 } from '@prisma/client';
+import { ALL_CLINIC_PERMISSIONS } from '@clinic/shared';
 import { slugify } from '../src/utils/slugify.js';
 import { hashPassword } from '../src/utils/password.js';
 import {
@@ -25,6 +26,8 @@ import {
   DEMO_PATIENT_PASSWORD,
   DEMO_DOCTOR_EMAIL,
   DEMO_DOCTOR_PASSWORD,
+  DEMO_RECEPTIONIST_EMAIL,
+  DEMO_RECEPTIONIST_PASSWORD,
 } from './seed-constants.js';
 
 const prisma = new PrismaClient();
@@ -1245,6 +1248,40 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
   });
 }
 
+/**
+ * Seeds one receptionist account at Sunrise Family Clinic with every CLINIC_PERMISSIONS key —
+ * without this, receptionists have no way to log in and exercise the Reception Portal at all
+ * (the same login-gap Phase 4 had for doctors before its demo account was seeded).
+ * Credentials: DEMO_RECEPTIONIST_EMAIL / DEMO_RECEPTIONIST_PASSWORD.
+ */
+async function seedDemoReceptionist(clinicRecords: Clinic[]): Promise<void> {
+  const sunriseClinic = clinicRecords.find((c) => c.name === 'Sunrise Family Clinic')!;
+  const passwordHash = await hashPassword(DEMO_RECEPTIONIST_PASSWORD);
+
+  const user = await prisma.user.upsert({
+    where: { email: DEMO_RECEPTIONIST_EMAIL },
+    update: { passwordHash },
+    create: {
+      email: DEMO_RECEPTIONIST_EMAIL,
+      passwordHash,
+      role: UserRole.RECEPTIONIST,
+      isEmailVerified: true,
+      isActive: true,
+    },
+  });
+
+  await prisma.clinicStaffMember.upsert({
+    where: { userId_clinicId: { userId: user.id, clinicId: sunriseClinic.id } },
+    update: { permissions: ALL_CLINIC_PERMISSIONS, isActive: true },
+    create: {
+      userId: user.id,
+      clinicId: sunriseClinic.id,
+      title: 'Front Desk Receptionist',
+      permissions: ALL_CLINIC_PERMISSIONS,
+    },
+  });
+}
+
 async function main() {
   console.log('Seeding specializations...');
   const specializationRecords = await Promise.all(
@@ -1391,6 +1428,9 @@ async function main() {
 
   console.log('Seeding doctor portal demo data...');
   await seedDoctorPortal(doctorRecords, clinicRecords);
+
+  console.log('Seeding demo receptionist...');
+  await seedDemoReceptionist(clinicRecords);
 
   console.log('Seeding testimonials...');
   const existingTestimonials = await prisma.testimonial.count();

@@ -7,6 +7,7 @@ import type {
   LeaveType,
   PrescriptionStatus,
   QueueStatus,
+  TokenPriority,
   TokenStatus,
   TokenType,
   Weekday,
@@ -160,6 +161,7 @@ export interface QueueTokenDto {
   startedAt: string | null;
   completedAt: string | null;
   skipReason: string | null;
+  priority: TokenPriority;
 }
 
 export interface QueueSnapshotDto {

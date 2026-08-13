@@ -9,3 +9,8 @@ export const DEMO_PATIENT_PASSWORD = 'DemoPass123!';
 export const DEMO_DOCTOR_EMAIL = 'aditi.sharma@doctors.example';
 export const DEMO_DOCTOR_PASSWORD = 'DemoPass123!';
 export const DEMO_DOCTOR_SLUG = 'dr-aditi-sharma';
+
+/** The seeded receptionist account at Sunrise Family Clinic, granted every CLINIC_PERMISSIONS
+ * key — used by the Reception Portal manual smoke test and its integration tests. */
+export const DEMO_RECEPTIONIST_EMAIL = 'reception@sunrise.example';
+export const DEMO_RECEPTIONIST_PASSWORD = 'DemoPass123!';

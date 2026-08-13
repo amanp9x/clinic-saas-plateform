@@ -71,6 +71,16 @@ export const TokenType = {
 } as const;
 export type TokenType = (typeof TokenType)[keyof typeof TokenType];
 
+/** Queue-ordering priority, distinct from `TokenType` (which is about origin, not urgency).
+ * Deterministic rank order: EMERGENCY > URGENT > FOLLOW_UP > NORMAL. */
+export const TokenPriority = {
+  NORMAL: 'NORMAL',
+  FOLLOW_UP: 'FOLLOW_UP',
+  URGENT: 'URGENT',
+  EMERGENCY: 'EMERGENCY',
+} as const;
+export type TokenPriority = (typeof TokenPriority)[keyof typeof TokenPriority];
+
 export const AuthProvider = {
   PASSWORD: 'PASSWORD',
   OTP: 'OTP',

@@ -6,10 +6,9 @@ import { toAppointmentDetail, toAppointmentSummary } from './appointments.mapper
 import { patientRepository } from '../patient/patient.repository.js';
 import { notifyUser } from '../notifications/notifications.service.js';
 import { queueRepository } from '../doctor-queue/queue.repository.js';
+import { calculateEta } from '../queue-engine/eta.service.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
-
-const DEFAULT_CONSULTATION_MINUTES = 15;
 
 const CANCELLABLE_STATUSES = new Set<AppointmentStatus>([
   AppointmentStatus.PENDING,
@@ -123,20 +122,26 @@ export const appointmentsService = {
 
     const session = token.doctorSession;
     const [patientsAhead, totalTokens, completedCount, currentTokenRow] = await Promise.all([
-      token.status === 'WAITING' ? queueRepository.countWaitingAhead(session.id, token.tokenNumber) : Promise.resolve(0),
+      token.status === 'WAITING' ? queueRepository.countWaitingAhead(session.id, token) : Promise.resolve(0),
       queueRepository.countTotalTokens(session.id),
       queueRepository.countByStatus(session.id, 'COMPLETED'),
       session.currentTokenId ? queueRepository.findToken(session.currentTokenId) : Promise.resolve(null),
     ]);
-    const avgMinutes = session.averageConsultationMinutes ?? DEFAULT_CONSULTATION_MINUTES;
+    const effectivePatientsAhead = token.status === 'WAITING' ? patientsAhead : token.status === 'CALLED' ? 0 : null;
 
     return {
       ...base,
       patientToken: appointment.tokenNumber ?? String(token.tokenNumber),
       isActive: session.queueStatus === 'ACTIVE',
       currentToken: currentTokenRow ? String(currentTokenRow.tokenNumber) : null,
-      patientsAhead: token.status === 'WAITING' ? patientsAhead : token.status === 'CALLED' ? 0 : null,
-      estimatedWaitMinutes: token.status === 'WAITING' ? patientsAhead * avgMinutes : token.status === 'CALLED' ? 0 : null,
+      patientsAhead: effectivePatientsAhead,
+      estimatedWaitMinutes: calculateEta({
+        patientsAhead: effectivePatientsAhead,
+        avgConsultationMinutes: session.averageConsultationMinutes,
+        delayMinutes: session.delayMinutes,
+        queueStatus: session.queueStatus,
+        doctorStatus: session.status,
+      }),
       delayMinutes: session.delayMinutes,
       delayReason: session.delayReason,
       doctorStatus: session.status,

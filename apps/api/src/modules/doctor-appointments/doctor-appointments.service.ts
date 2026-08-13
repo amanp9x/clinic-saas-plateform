@@ -1,7 +1,7 @@
 import { AppointmentStatus } from '@prisma/client';
 import { SOCKET_EVENTS } from '@clinic/shared';
 import type { DoctorAppointmentListQuery, PaginatedResult, DoctorAppointmentSummaryDto, DoctorAppointmentDetailDto } from '@clinic/shared';
-import { doctorAppointmentsRepository } from './doctor-appointments.repository.js';
+import { doctorAppointmentsRepository, type DoctorAppointmentWithRelations } from './doctor-appointments.repository.js';
 import { toDoctorAppointmentDetail } from './doctor-appointments.mappers.js';
 import { toDoctorAppointmentSummary } from '../doctor/doctor.mappers.js';
 import { resolveDoctorOrThrow } from '../doctor/doctor.shared.js';
@@ -23,6 +23,97 @@ async function requireOwnedAppointment(doctorId: string, appointmentId: string) 
   }
   return appointment;
 }
+
+/**
+ * Doctor-scoped appointment-lifecycle core, parameterized by an already-resolved `doctorId`
+ * so the reception queue console can trigger the exact same start/no-show/skip logic (after
+ * its own clinic-permission check) instead of re-implementing the consultation-record
+ * bookkeeping that lives here.
+ */
+export const doctorAppointmentsEngine = {
+  async start(doctor: { id: string; displayName: string }, appointment: DoctorAppointmentWithRelations, actorUserId: string): Promise<DoctorAppointmentDetailDto> {
+    if (!ACTIVE_STATUSES.has(appointment.status)) {
+      throw new ConflictError(`An appointment with status ${appointment.status} cannot be started`);
+    }
+
+    const token = await queueRepository.findTokenByAppointmentId(appointment.id);
+
+    const existingConsultation = await prisma.consultation.findUnique({ where: { appointmentId: appointment.id } });
+    if (existingConsultation?.status === 'COMPLETED') {
+      throw new ConflictError('This consultation has already been completed');
+    }
+    if (!existingConsultation) {
+      await prisma.consultation.create({
+        data: {
+          appointmentId: appointment.id,
+          doctorId: doctor.id,
+          patientId: appointment.patientId,
+          clinicId: appointment.clinicId,
+          tokenId: token?.id,
+          status: 'IN_PROGRESS',
+          startedAt: new Date(),
+        },
+      });
+    } else if (existingConsultation.status === 'NOT_STARTED') {
+      await prisma.consultation.update({
+        where: { appointmentId: appointment.id },
+        data: { status: 'IN_PROGRESS', startedAt: existingConsultation.startedAt ?? new Date() },
+      });
+    }
+
+    const updated = await doctorAppointmentsRepository.updateStatus(appointment.id, {
+      status: AppointmentStatus.IN_CONSULTATION,
+    });
+    if (token) {
+      await queueRepository.updateToken(token.id, { status: 'IN_CONSULTATION', startedAt: new Date() });
+    }
+
+    recordAuditLog({ actorUserId, action: 'queue.consultation_started', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId, metadata: { doctorId: doctor.id } });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.STARTED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.IN_CONSULTATION, { appointmentId: appointment.id, clinicId: appointment.clinicId });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: updated.status });
+    return toDoctorAppointmentDetail(updated);
+  },
+
+  async markNoShow(appointment: DoctorAppointmentWithRelations, actorUserId: string): Promise<DoctorAppointmentDetailDto> {
+    if (!ACTIVE_STATUSES.has(appointment.status)) {
+      throw new ConflictError(`An appointment with status ${appointment.status} cannot be marked no-show`);
+    }
+
+    const updated = await doctorAppointmentsRepository.updateStatus(appointment.id, {
+      status: AppointmentStatus.NO_SHOW,
+    });
+    const token = await queueRepository.findTokenByAppointmentId(appointment.id);
+    if (token) {
+      await queueRepository.updateToken(token.id, { status: 'NO_SHOW' });
+    }
+
+    recordAuditLog({ actorUserId, action: 'queue.appointment_no_show', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: updated.status });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
+    return toDoctorAppointmentDetail(updated);
+  },
+
+  async skip(appointment: DoctorAppointmentWithRelations, actorUserId: string, reason: string | undefined): Promise<DoctorAppointmentDetailDto> {
+    const token = await queueRepository.findTokenByAppointmentId(appointment.id);
+    if (!token) {
+      throw new ConflictError('This appointment is not currently in a live queue');
+    }
+    if (token.status === 'COMPLETED' || token.status === 'CANCELLED') {
+      throw new ConflictError(`A token with status ${token.status} cannot be skipped`);
+    }
+
+    await queueRepository.updateToken(token.id, { status: 'SKIPPED', skipReason: reason || null });
+    if (token.doctorSession.currentTokenId === token.id) {
+      await queueRepository.updateSession(token.doctorSessionId, { currentTokenId: null });
+    }
+
+    recordAuditLog({ actorUserId, action: 'queue.appointment_skipped', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId, metadata: { reason } });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.SKIPPED, { clinicId: appointment.clinicId, appointmentId: appointment.id });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
+    return toDoctorAppointmentDetail(appointment);
+  },
+};
 
 export const doctorAppointmentsService = {
   async list(userId: string, query: DoctorAppointmentListQuery): Promise<PaginatedResult<DoctorAppointmentSummaryDto>> {
@@ -52,88 +143,20 @@ export const doctorAppointmentsService = {
   async start(userId: string, appointmentId: string): Promise<DoctorAppointmentDetailDto> {
     const doctor = await resolveDoctorOrThrow(userId);
     const appointment = await requireOwnedAppointment(doctor.id, appointmentId);
-    if (!ACTIVE_STATUSES.has(appointment.status)) {
-      throw new ConflictError(`An appointment with status ${appointment.status} cannot be started`);
-    }
-
-    const token = await queueRepository.findTokenByAppointmentId(appointmentId);
-
-    const existingConsultation = await prisma.consultation.findUnique({ where: { appointmentId } });
-    if (existingConsultation?.status === 'COMPLETED') {
-      throw new ConflictError('This consultation has already been completed');
-    }
-    if (!existingConsultation) {
-      await prisma.consultation.create({
-        data: {
-          appointmentId,
-          doctorId: doctor.id,
-          patientId: appointment.patientId,
-          clinicId: appointment.clinicId,
-          tokenId: token?.id,
-          status: 'IN_PROGRESS',
-          startedAt: new Date(),
-        },
-      });
-    } else if (existingConsultation.status === 'NOT_STARTED') {
-      await prisma.consultation.update({
-        where: { appointmentId },
-        data: { status: 'IN_PROGRESS', startedAt: existingConsultation.startedAt ?? new Date() },
-      });
-    }
-
-    const updated = await doctorAppointmentsRepository.updateStatus(appointmentId, {
-      status: AppointmentStatus.IN_CONSULTATION,
-    });
-    if (token) {
-      await queueRepository.updateToken(token.id, { status: 'IN_CONSULTATION', startedAt: new Date() });
-    }
-
-    recordAuditLog({ actorUserId: userId, action: 'doctor.consultation_started', entityType: 'Appointment', entityId: appointmentId });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.STARTED, { appointmentId, clinicId: appointment.clinicId });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId, clinicId: appointment.clinicId, status: updated.status });
-    return toDoctorAppointmentDetail(updated);
+    return doctorAppointmentsEngine.start(doctor, appointment, userId);
   },
 
   async markNoShow(userId: string, appointmentId: string): Promise<DoctorAppointmentDetailDto> {
     const doctor = await resolveDoctorOrThrow(userId);
     const appointment = await requireOwnedAppointment(doctor.id, appointmentId);
-    if (!ACTIVE_STATUSES.has(appointment.status)) {
-      throw new ConflictError(`An appointment with status ${appointment.status} cannot be marked no-show`);
-    }
-
-    const updated = await doctorAppointmentsRepository.updateStatus(appointmentId, {
-      status: AppointmentStatus.NO_SHOW,
-    });
-    const token = await queueRepository.findTokenByAppointmentId(appointmentId);
-    if (token) {
-      await queueRepository.updateToken(token.id, { status: 'NO_SHOW' });
-    }
-
-    recordAuditLog({ actorUserId: userId, action: 'doctor.appointment_no_show', entityType: 'Appointment', entityId: appointmentId });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId, clinicId: appointment.clinicId, status: updated.status });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
-    return toDoctorAppointmentDetail(updated);
+    return doctorAppointmentsEngine.markNoShow(appointment, userId);
   },
 
   async skip(userId: string, appointmentId: string, reason: string | undefined): Promise<DoctorAppointmentDetailDto> {
     const doctor = await resolveDoctorOrThrow(userId);
     const appointment = await requireOwnedAppointment(doctor.id, appointmentId);
-    const token = await queueRepository.findTokenByAppointmentId(appointmentId);
-    if (!token) {
-      throw new ConflictError('This appointment is not currently in a live queue');
-    }
-    if (token.status === 'COMPLETED' || token.status === 'CANCELLED') {
-      throw new ConflictError(`A token with status ${token.status} cannot be skipped`);
-    }
-
-    await queueRepository.updateToken(token.id, { status: 'SKIPPED', skipReason: reason || null });
-    if (token.doctorSession.currentTokenId === token.id) {
-      await queueRepository.updateSession(token.doctorSessionId, { currentTokenId: null });
-    }
-
-    recordAuditLog({ actorUserId: userId, action: 'doctor.appointment_skipped', entityType: 'Appointment', entityId: appointmentId, metadata: { reason } });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.SKIPPED, { clinicId: appointment.clinicId, appointmentId });
-    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
-    return toDoctorAppointmentDetail(appointment);
+    return doctorAppointmentsEngine.skip(appointment, userId, reason);
   },
 };
+
+export { requireOwnedAppointment };

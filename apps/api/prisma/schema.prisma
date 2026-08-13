@@ -135,6 +135,22 @@ enum TokenType {
   EMERGENCY
 }
 
+/// Queue-ordering urgency, distinct from TokenType (origin). Deterministic rank order:
+/// EMERGENCY > URGENT > FOLLOW_UP > NORMAL — applied wherever the queue is ordered.
+enum TokenPriority {
+  NORMAL
+  FOLLOW_UP
+  URGENT
+  EMERGENCY
+}
+
+/// Walk-in intake flag only — no payment processing. Payment Engine is explicitly out of scope.
+enum PaymentStatus {
+  PENDING
+  PAID
+  WAIVED
+}
+
 enum ConsultationStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -273,6 +289,7 @@ model Clinic {
   appointments   Appointment[]
   doctorSessions DoctorSession[]
   doctorLeaves   DoctorLeave[]
+  auditLogs      AuditLog[]
 
   @@index([slug])
   @@index([city])
@@ -464,6 +481,8 @@ model DoctorSession {
   delayReason                String?
   delayUpdatedAt             DateTime?
   delayUpdatedBy             String?
+  /// Reason shown to waiting patients while queueStatus = PAUSED (distinct from delayReason).
+  pauseReason                String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -480,15 +499,16 @@ model DoctorSession {
 
 /// A single patient's position in a doctor's live queue for a given session.
 model QueueToken {
-  id              String      @id @default(uuid())
+  id              String        @id @default(uuid())
   doctorSessionId String
-  appointmentId   String?     @unique
+  appointmentId   String?       @unique
   patientId       String
   tokenNumber     Int
-  type            TokenType   @default(SCHEDULED)
-  status          TokenStatus @default(WAITING)
+  type            TokenType     @default(SCHEDULED)
+  status          TokenStatus   @default(WAITING)
+  priority        TokenPriority @default(NORMAL)
   calledAt        DateTime?
-  calledCount     Int         @default(0)
+  calledCount     Int           @default(0)
   startedAt       DateTime?
   completedAt     DateTime?
   skipReason      String?
@@ -699,6 +719,8 @@ model Appointment {
   tokenNumber     String?
   reasonForVisit  String?
   consultationFee Decimal?          @db.Decimal(10, 2)
+  /// Walk-in intake flag only, set by reception at registration — no payment processing.
+  paymentStatus   PaymentStatus?
   cancelReason    String?
   cancelledAt     DateTime?
   completedAt     DateTime?
@@ -876,11 +898,14 @@ model NotificationPreference {
 
 /// Receptionists / clinic staff / clinic admins scoped to a specific clinic.
 model ClinicStaffMember {
-  id       String  @id @default(uuid())
-  userId   String
-  clinicId String
-  title    String?
-  isActive Boolean @default(true)
+  id          String   @id @default(uuid())
+  userId      String
+  clinicId    String
+  title       String?
+  isActive    Boolean  @default(true)
+  /// Canonical keys defined once in packages/shared/src/permissions.ts (e.g. "queue.manage",
+  /// "patient.checkin"). CLINIC_ADMIN role bypasses this list entirely — see reception.shared.ts.
+  permissions String[] @default([])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -900,6 +925,9 @@ model ClinicStaffMember {
 model AuditLog {
   id          String   @id @default(uuid())
   actorUserId String?
+  /// Denormalized for direct "clinic queue history" queries without joining through entityId.
+  /// Nullable — most audit rows (auth, profile edits) aren't clinic-scoped.
+  clinicId    String?
   action      String
   entityType  String
   entityId    String?
@@ -907,9 +935,11 @@ model AuditLog {
   ipAddress   String?
   createdAt   DateTime @default(now())
 
-  actor User? @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  actor  User?   @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
   @@index([actorUserId])
+  @@index([clinicId, createdAt])
   @@map("audit_logs")
 }

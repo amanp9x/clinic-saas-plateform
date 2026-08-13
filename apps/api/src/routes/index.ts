@@ -14,6 +14,10 @@ import { doctorPatientsRouter } from '../modules/doctor-patients/doctor-patients
 import { queueRouter } from '../modules/doctor-queue/queue.routes.js';
 import { consultationRouter } from '../modules/doctor-consultation/consultation.routes.js';
 import { prescriptionRouter, signatureRouter } from '../modules/doctor-prescription/prescription.routes.js';
+import { receptionRouter } from '../modules/reception/reception.routes.js';
+import { receptionCheckinRouter } from '../modules/reception-checkin/reception-checkin.routes.js';
+import { receptionQueueRouter } from '../modules/reception-queue/reception-queue.routes.js';
+import { receptionAppointmentsRouter } from '../modules/reception-appointments/reception-appointments.routes.js';
 
 export const apiRouter = Router();
 
@@ -35,3 +39,9 @@ apiRouter.use('/doctor/queue', queueRouter);
 apiRouter.use('/doctor/consultations', consultationRouter);
 apiRouter.use('/doctor/prescriptions', prescriptionRouter);
 apiRouter.use('/doctor/settings/signature', signatureRouter);
+
+// --- Reception / Clinic Staff Portal (Phase 5) -------------------------------
+apiRouter.use('/reception', receptionRouter);
+apiRouter.use('/reception', receptionCheckinRouter);
+apiRouter.use('/reception/queue', receptionQueueRouter);
+apiRouter.use('/reception', receptionAppointmentsRouter);
