@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Award, Clock3, Globe2, GraduationCap, Languages, MapPin } from 'lucide-react';
 import { getDoctorBySlug } from '@/lib/catalog-api';
@@ -9,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { RatingStars } from '@/components/marketing/rating-stars';
 import { DoctorCard } from '@/components/marketing/doctor-card';
 import { DoctorReviews } from '@/components/marketing/doctor-reviews';
-import { QueueStatusCard } from '@/components/marketing/queue-status-card';
+import { LiveQueueStatus } from '@/components/marketing/live-queue-status';
 import { BookAppointmentButton } from '@/components/marketing/book-appointment-button';
-import { formatDays, formatExperience, formatFee, initials } from '@/lib/format';
+import { FavoriteButton } from '@/components/marketing/favorite-button';
+import { formatDate, formatDays, formatExperience, formatFee, initials } from '@/lib/format';
 
 interface Params {
   slug: string;
@@ -34,6 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     title,
     description,
     openGraph: { title, description, type: 'profile' },
+    alternates: { canonical: `/doctors/${doctor.slug}` },
   };
 }
 
@@ -81,11 +84,14 @@ export default async function DoctorProfilePage({ params }: { params: Promise<Pa
                 <AvatarFallback className="text-lg">{initials(doctor.displayName)}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
-                <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">{doctor.displayName}</h1>
-                  <p className="text-muted-foreground">
-                    {doctor.specializationName ?? 'General Practice'}
-                  </p>
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h1 className="text-2xl font-semibold tracking-tight">{doctor.displayName}</h1>
+                    <p className="text-muted-foreground">
+                      {doctor.specializationName ?? 'General Practice'}
+                    </p>
+                  </div>
+                  <FavoriteButton type="doctor" id={doctor.id} />
                 </div>
                 <RatingStars rating={doctor.ratingAverage} count={doctor.ratingCount} size="md" />
                 <div className="flex flex-wrap gap-1.5">
@@ -146,32 +152,46 @@ export default async function DoctorProfilePage({ params }: { params: Promise<Pa
             </CardContent>
           </Card>
 
-          <QueueStatusCard status={doctor.queueStatus} />
-
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Clinic timings</CardTitle>
+              <CardTitle className="text-base">Clinics &amp; availability</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               {doctor.clinics.length === 0 && (
                 <p className="text-muted-foreground text-sm">No clinic affiliations listed.</p>
               )}
               {doctor.clinics.map((affiliation) => (
-                <div
-                  key={affiliation.clinicId}
-                  className="flex items-start gap-3 rounded-lg border p-3"
-                >
-                  <Clock3 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
-                  <div>
-                    <p className="text-sm font-medium">{affiliation.clinicName}</p>
-                    {affiliation.city && (
-                      <p className="text-muted-foreground text-xs">{affiliation.city}</p>
-                    )}
-                    <p className="mt-1 text-sm">{affiliation.timings ?? 'Timings not listed'}</p>
-                    <p className="text-muted-foreground text-xs">
-                      {formatDays(affiliation.availableDays)}
-                    </p>
+                <div key={affiliation.clinicId} className="space-y-3 rounded-lg border p-3">
+                  <div className="flex items-start gap-3">
+                    <Clock3 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+                    <div className="flex-1">
+                      <Link
+                        href={`/clinics/${affiliation.clinicSlug}`}
+                        className="text-sm font-medium hover:underline"
+                      >
+                        {affiliation.clinicName}
+                      </Link>
+                      {(affiliation.area || affiliation.city) && (
+                        <p className="text-muted-foreground text-xs">
+                          {[affiliation.area, affiliation.city].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                      <p className="mt-1 text-sm">{affiliation.timings ?? 'Timings not listed'}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {formatDays(affiliation.availableDays)}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-xs">
+                        {affiliation.nextAvailable
+                          ? `Next available: ${formatDate(`${affiliation.nextAvailable.date}T00:00:00.000Z`)} · ${affiliation.nextAvailable.startTime}–${affiliation.nextAvailable.endTime}`
+                          : 'Not available in the near future'}
+                      </p>
+                    </div>
                   </div>
+                  <LiveQueueStatus
+                    doctorSlug={doctor.slug}
+                    clinicId={affiliation.clinicId}
+                    initialStatus={affiliation.queueStatus}
+                  />
                 </div>
               ))}
             </CardContent>
@@ -181,7 +201,29 @@ export default async function DoctorProfilePage({ params }: { params: Promise<Pa
             <CardHeader>
               <CardTitle className="text-base">Patient reviews</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <RatingStars rating={doctor.ratingBreakdown.average} count={doctor.ratingBreakdown.count} size="md" />
+              </div>
+              <div className="space-y-1">
+                {doctor.ratingBreakdown.distribution.map((row) => (
+                  <div key={row.rating} className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground w-10">{row.rating} star</span>
+                    <div className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full">
+                      <div
+                        className="bg-amber-400 h-full"
+                        style={{
+                          width:
+                            doctor.ratingBreakdown.count > 0
+                              ? `${(row.count / doctor.ratingBreakdown.count) * 100}%`
+                              : '0%',
+                        }}
+                      />
+                    </div>
+                    <span className="text-muted-foreground w-6 text-right">{row.count}</span>
+                  </div>
+                ))}
+              </div>
               <DoctorReviews reviews={doctor.reviews} />
             </CardContent>
           </Card>

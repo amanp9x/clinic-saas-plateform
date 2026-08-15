@@ -19,13 +19,18 @@ function toStringParams(searchParams: SearchParams): Record<string, string | und
   return {
     query: first(searchParams.query),
     city: first(searchParams.city),
+    area: first(searchParams.area),
+    clinicId: first(searchParams.clinicId),
     specializationSlug: first(searchParams.specializationSlug),
     gender: first(searchParams.gender),
     minExperience: first(searchParams.minExperience),
     maxFee: first(searchParams.maxFee),
     minRating: first(searchParams.minRating),
     availableToday: first(searchParams.availableToday),
+    availableThisWeek: first(searchParams.availableThisWeek),
     onlineConsultation: first(searchParams.onlineConsultation),
+    consultationType: first(searchParams.consultationType),
+    languages: first(searchParams.languages),
     sort: first(searchParams.sort),
   };
 }
@@ -41,6 +46,7 @@ export async function generateMetadata({
   return {
     title: parts.join(' | '),
     description: 'Search verified doctors by speciality, city, fees, rating, and availability.',
+    alternates: { canonical: '/doctors' },
   };
 }
 
@@ -59,13 +65,18 @@ export default async function DoctorsSearchPage({
     searchDoctors({
       query: params.query,
       city: params.city,
+      area: params.area,
+      clinicId: params.clinicId,
       specializationSlug: params.specializationSlug,
       gender: params.gender,
       minExperience: params.minExperience ? Number(params.minExperience) : undefined,
       maxFee: params.maxFee ? Number(params.maxFee) : undefined,
       minRating: params.minRating ? Number(params.minRating) : undefined,
       availableToday: params.availableToday === 'true',
+      availableThisWeek: params.availableThisWeek === 'true',
       onlineConsultation: params.onlineConsultation === 'true',
+      consultationType: params.consultationType,
+      languages: params.languages ? [params.languages] : undefined,
       sort: params.sort,
       page,
       limit: 12,

@@ -355,6 +355,7 @@ model Clinic {
   addressLine1 String?
   addressLine2 String?
   city         String?
+  area         String?
   state        String?
   postalCode   String?
   country      String  @default("IN")
@@ -408,9 +409,11 @@ model Clinic {
   resources        ClinicResource[]
   staffInvitations StaffInvitation[]
   settings         ClinicSettings?
+  favorites        Favorite[]
 
   @@index([slug])
   @@index([city])
+  @@index([city, area])
   @@map("clinics")
 }
 
@@ -427,6 +430,7 @@ model Hospital {
   addressLine1 String?
   addressLine2 String?
   city         String?
+  area         String?
   state        String?
   postalCode   String?
   country      String  @default("IN")
@@ -439,6 +443,7 @@ model Hospital {
 
   @@index([slug])
   @@index([city])
+  @@index([city, area])
   @@map("hospitals")
 }
 
@@ -490,6 +495,7 @@ model Doctor {
   signature      DoctorSignature?
   medicalRecords MedicalRecord[]
   consultations  Consultation[]
+  favorites      Favorite[]
 
   @@index([slug])
   @@index([specializationId])
@@ -549,6 +555,27 @@ model DoctorReview {
 
   @@index([doctorId])
   @@map("doctor_reviews")
+}
+
+/// A patient's saved doctor or clinic (discovery/favorites). Exactly one of doctorId/clinicId is
+/// set per row — enforced in the service layer, not the DB (no raw SQL check constraints elsewhere
+/// in this schema). Postgres unique constraints ignore NULLs, so a doctor-row and a clinic-row
+/// never collide with each other on these two unique indexes.
+model Favorite {
+  id        String   @id @default(uuid())
+  patientId String
+  doctorId  String?
+  clinicId  String?
+  createdAt DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor?  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic  Clinic?  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, doctorId])
+  @@unique([patientId, clinicId])
+  @@index([patientId])
+  @@map("favorites")
 }
 
 /// Recurring weekly availability template for a doctor at a specific clinic. Multiple rows with
@@ -810,6 +837,7 @@ model Patient {
   medicalRecords MedicalRecord[]
   queueTokens    QueueToken[]
   consultations  Consultation[]
+  favorites      Favorite[]
 
   @@map("patients")
 }

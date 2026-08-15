@@ -13,3 +13,7 @@ const JS_DAY_TO_WEEKDAY: Weekday[] = [
 export function todayWeekday(): Weekday {
   return JS_DAY_TO_WEEKDAY[new Date().getDay()]!;
 }
+
+export function weekdayForDate(date: Date): Weekday {
+  return JS_DAY_TO_WEEKDAY[date.getDay()]!;
+}

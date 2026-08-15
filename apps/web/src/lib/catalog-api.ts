@@ -2,6 +2,7 @@ import 'server-only';
 import type {
   ApiResponse,
   ArticleDto,
+  ClinicDetail,
   ClinicSummary,
   DoctorDetail,
   DoctorSummary,
@@ -12,12 +13,15 @@ import type {
 } from '@clinic/shared';
 import { clientEnv } from './env';
 
-type QueryValue = string | number | boolean | undefined;
+type QueryValue = string | number | boolean | string[] | undefined;
 
 function toQueryString(params: Record<string, QueryValue>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== '') {
+    if (value === undefined || value === '') continue;
+    if (Array.isArray(value)) {
+      for (const v of value) search.append(key, v);
+    } else {
       search.set(key, String(value));
     }
   }
@@ -62,13 +66,18 @@ export interface DoctorSearchParams {
   [key: string]: QueryValue;
   query?: string;
   city?: string;
+  area?: string;
+  clinicId?: string;
   specializationSlug?: string;
   gender?: string;
   minExperience?: number;
   maxFee?: number;
   minRating?: number;
   availableToday?: boolean;
+  availableThisWeek?: boolean;
   onlineConsultation?: boolean;
+  consultationType?: string;
+  languages?: string[];
   sort?: string;
   page?: number;
   limit?: number;
@@ -100,12 +109,41 @@ export interface FacilitySearchParams {
   limit?: number;
 }
 
-export function searchClinics(params: FacilitySearchParams) {
+export interface ClinicSearchParams extends FacilitySearchParams {
+  area?: string;
+  minRating?: number;
+  availableToday?: boolean;
+  maxFee?: number;
+  consultationType?: string;
+  service?: string;
+}
+
+export function searchClinics(params: ClinicSearchParams) {
   return catalogFetch<PaginatedResult<ClinicSummary>>('/api/v1/catalog/clinics', params, 60);
+}
+
+export async function getClinicBySlug(slug: string): Promise<ClinicDetail | null> {
+  try {
+    return await catalogFetch<ClinicDetail>(`/api/v1/catalog/clinics/${encodeURIComponent(slug)}`, {}, 30);
+  } catch {
+    return null;
+  }
 }
 
 export function searchHospitals(params: FacilitySearchParams) {
   return catalogFetch<PaginatedResult<HospitalSummary>>('/api/v1/catalog/hospitals', params, 60);
+}
+
+export async function getSpecializationBySlug(slug: string): Promise<SpecializationSummary | null> {
+  try {
+    return await catalogFetch<SpecializationSummary>(
+      `/api/v1/catalog/specializations/${encodeURIComponent(slug)}`,
+      {},
+      300,
+    );
+  } catch {
+    return null;
+  }
 }
 
 export function getTestimonials(limit = 6) {

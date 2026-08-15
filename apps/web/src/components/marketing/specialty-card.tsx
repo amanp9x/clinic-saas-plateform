@@ -5,7 +5,7 @@ import { SpecializationIcon } from '@/lib/specialization-icons';
 
 export function SpecialtyCard({ specialization }: { specialization: SpecializationSummary }) {
   return (
-    <Link href={`/doctors?specializationSlug=${specialization.slug}`}>
+    <Link href={`/specializations/${specialization.slug}`}>
       <Card className="h-full transition-shadow hover:shadow-md">
         <CardContent className="flex flex-col items-center gap-2 text-center">
           <div className="bg-primary/10 text-primary flex size-12 items-center justify-center rounded-full">

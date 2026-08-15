@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Gender } from '@clinic/shared';
+import { ConsultationType, Gender } from '@clinic/shared';
 import type { SpecializationSummary } from '@clinic/shared';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -18,19 +18,28 @@ import {
 
 export interface DoctorFiltersValue {
   city?: string;
+  area?: string;
   specializationSlug?: string;
   gender?: string;
   minExperience?: string;
   maxFee?: string;
   minRating?: string;
   availableToday?: string;
+  availableThisWeek?: string;
   onlineConsultation?: string;
+  consultationType?: string;
+  languages?: string;
 }
 
 const GENDER_LABELS: Record<string, string> = {
   [Gender.MALE]: 'Male',
   [Gender.FEMALE]: 'Female',
   [Gender.OTHER]: 'Other',
+};
+
+const CONSULTATION_TYPE_LABELS: Record<string, string> = {
+  [ConsultationType.IN_CLINIC]: 'In-clinic',
+  [ConsultationType.ONLINE]: 'Online',
 };
 
 export function DoctorFilters({
@@ -78,6 +87,16 @@ export function DoctorFilters({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="area">Area</Label>
+        <Input
+          id="area"
+          value={values.area ?? ''}
+          onChange={(e) => update('area', e.target.value || undefined)}
+          placeholder="e.g. Andheri West"
+        />
       </div>
 
       <div className="space-y-1.5">
@@ -154,6 +173,35 @@ export function DoctorFilters({
         </Select>
       </div>
 
+      <div className="space-y-1.5">
+        <Label htmlFor="languages">Language</Label>
+        <Input
+          id="languages"
+          value={values.languages ?? ''}
+          onChange={(e) => update('languages', e.target.value || undefined)}
+          placeholder="e.g. Hindi"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label>Consultation type</Label>
+        <Select
+          value={values.consultationType ?? ''}
+          onValueChange={(v) => update('consultationType', v ?? undefined)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Any" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.entries(CONSULTATION_TYPE_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
       <div className="flex items-center gap-2">
         <Checkbox
           id="availableToday"
@@ -162,6 +210,17 @@ export function DoctorFilters({
         />
         <Label htmlFor="availableToday" className="font-normal">
           Available today
+        </Label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="availableThisWeek"
+          checked={values.availableThisWeek === 'true'}
+          onCheckedChange={(checked) => update('availableThisWeek', checked ? 'true' : undefined)}
+        />
+        <Label htmlFor="availableThisWeek" className="font-normal">
+          Available this week
         </Label>
       </div>
 

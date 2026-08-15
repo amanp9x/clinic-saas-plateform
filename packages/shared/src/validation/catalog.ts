@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Gender } from '../enums.js';
+import { ConsultationType, Gender } from '../enums.js';
 
 const page = z.coerce.number().int().min(1).default(1);
 const limit = z.coerce.number().int().min(1).max(50).default(12);
@@ -13,19 +13,29 @@ export const doctorSortSchema = z.enum([
   'experience',
   'fee_low',
   'fee_high',
+  'availability',
+  'most_reviewed',
 ]);
 export type DoctorSort = z.infer<typeof doctorSortSchema>;
 
 export const doctorSearchSchema = z.object({
   query: z.string().trim().max(120).optional(),
   city: z.string().trim().max(80).optional(),
+  area: z.string().trim().max(80).optional(),
+  clinicId: z.string().uuid().optional(),
   specializationSlug: z.string().trim().max(80).optional(),
   gender: z.nativeEnum(Gender).optional(),
   minExperience: z.coerce.number().int().min(0).max(60).optional(),
   maxFee: z.coerce.number().min(0).optional(),
   minRating: z.coerce.number().min(0).max(5).optional(),
   availableToday: booleanish.optional(),
+  availableThisWeek: booleanish.optional(),
   onlineConsultation: booleanish.optional(),
+  consultationType: z.nativeEnum(ConsultationType).optional(),
+  languages: z
+    .union([z.string(), z.array(z.string())])
+    .transform((v) => (Array.isArray(v) ? v : [v]))
+    .optional(),
   sort: doctorSortSchema.optional().default('relevance'),
   page,
   limit,
@@ -35,6 +45,12 @@ export type DoctorSearchInput = z.infer<typeof doctorSearchSchema>;
 export const clinicSearchSchema = z.object({
   query: z.string().trim().max(120).optional(),
   city: z.string().trim().max(80).optional(),
+  area: z.string().trim().max(80).optional(),
+  minRating: z.coerce.number().min(0).max(5).optional(),
+  availableToday: booleanish.optional(),
+  maxFee: z.coerce.number().min(0).optional(),
+  consultationType: z.nativeEnum(ConsultationType).optional(),
+  service: z.string().trim().max(120).optional(),
   page,
   limit,
 });
@@ -50,6 +66,18 @@ export type HospitalSearchInput = z.infer<typeof hospitalSearchSchema>;
 
 export const doctorSlugParamSchema = z.object({
   slug: z.string().trim().min(1),
+});
+
+export const clinicSlugParamSchema = z.object({
+  slug: z.string().trim().min(1),
+});
+
+export const specializationSlugParamSchema = z.object({
+  slug: z.string().trim().min(1),
+});
+
+export const doctorQueueQuerySchema = z.object({
+  clinicId: z.string().uuid(),
 });
 
 export const previewLimitSchema = z.object({
