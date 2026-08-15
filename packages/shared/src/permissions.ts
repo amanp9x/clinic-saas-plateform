@@ -16,6 +16,28 @@ export const CLINIC_PERMISSIONS = {
   APPOINTMENT_MANAGE: 'appointment.manage',
   DOCTOR_STATUS_UPDATE: 'doctor.status.update',
   REPORTS_VIEW: 'reports.view',
+
+  // Phase 6 — Clinic Management. Additive only: nothing above this line is removed or renamed,
+  // so every existing Reception/Doctor permission check keeps working unchanged.
+  CLINIC_VIEW: 'clinic.view',
+  CLINIC_UPDATE: 'clinic.update',
+  CLINIC_DOCUMENTS_MANAGE: 'clinic.documents.manage',
+  DOCTOR_VIEW: 'doctor.view',
+  DOCTOR_MANAGE: 'doctor.manage',
+  DOCTOR_SCHEDULE_MANAGE: 'doctor.schedule.manage',
+  STAFF_VIEW: 'staff.view',
+  STAFF_MANAGE: 'staff.manage',
+  STAFF_PERMISSIONS_MANAGE: 'staff.permissions.manage',
+  DEPARTMENT_VIEW: 'department.view',
+  DEPARTMENT_MANAGE: 'department.manage',
+  SERVICE_VIEW: 'service.view',
+  SERVICE_MANAGE: 'service.manage',
+  SCHEDULE_VIEW: 'schedule.view',
+  SCHEDULE_MANAGE: 'schedule.manage',
+  HOLIDAY_VIEW: 'holiday.view',
+  HOLIDAY_MANAGE: 'holiday.manage',
+  RESOURCE_VIEW: 'resource.view',
+  RESOURCE_MANAGE: 'resource.manage',
 } as const;
 
 export type ClinicPermission = (typeof CLINIC_PERMISSIONS)[keyof typeof CLINIC_PERMISSIONS];

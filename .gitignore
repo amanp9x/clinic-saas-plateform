@@ -29,6 +29,7 @@ apps/api/prisma/migrations/dev/
 
 # Uploaded files (local storage driver)
 apps/api/uploads/
+apps/api/private-uploads/
 
 # IDE
 .vscode/*

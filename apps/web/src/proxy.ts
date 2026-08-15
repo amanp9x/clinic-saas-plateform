@@ -10,6 +10,7 @@ const PROTECTED_PREFIXES = [
   '/settings',
   '/doctor',
   '/reception',
+  '/clinic',
 ];
 
 /**
@@ -41,5 +42,6 @@ export const config = {
     '/settings/:path*',
     '/doctor/:path*',
     '/reception/:path*',
+    '/clinic/:path*',
   ],
 };

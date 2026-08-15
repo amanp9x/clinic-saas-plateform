@@ -133,3 +133,84 @@ export const Weekday = {
   SUN: 'SUN',
 } as const;
 export type Weekday = (typeof Weekday)[keyof typeof Weekday];
+
+// ---------------------------------------------------------------------------
+// Clinic Management (Phase 6)
+// ---------------------------------------------------------------------------
+
+export const ClinicOperatingStatus = {
+  OPEN: 'OPEN',
+  CLOSED: 'CLOSED',
+  TEMPORARILY_CLOSED: 'TEMPORARILY_CLOSED',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type ClinicOperatingStatus = (typeof ClinicOperatingStatus)[keyof typeof ClinicOperatingStatus];
+
+export const ClinicVerificationStatus = {
+  PENDING: 'PENDING',
+  SUBMITTED: 'SUBMITTED',
+  UNDER_REVIEW: 'UNDER_REVIEW',
+  VERIFIED: 'VERIFIED',
+  REJECTED: 'REJECTED',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type ClinicVerificationStatus = (typeof ClinicVerificationStatus)[keyof typeof ClinicVerificationStatus];
+
+export const ClinicDocumentType = {
+  REGISTRATION_CERTIFICATE: 'REGISTRATION_CERTIFICATE',
+  LICENSE: 'LICENSE',
+  TAX_DOCUMENT: 'TAX_DOCUMENT',
+  OTHER: 'OTHER',
+} as const;
+export type ClinicDocumentType = (typeof ClinicDocumentType)[keyof typeof ClinicDocumentType];
+
+export const ClinicDocumentStatus = {
+  UPLOADED: 'UPLOADED',
+  VERIFIED: 'VERIFIED',
+  REJECTED: 'REJECTED',
+} as const;
+export type ClinicDocumentStatus = (typeof ClinicDocumentStatus)[keyof typeof ClinicDocumentStatus];
+
+export const ClinicDoctorStatus = {
+  ACTIVE: 'ACTIVE',
+  INACTIVE: 'INACTIVE',
+  SUSPENDED: 'SUSPENDED',
+} as const;
+export type ClinicDoctorStatus = (typeof ClinicDoctorStatus)[keyof typeof ClinicDoctorStatus];
+
+export const ConsultationType = {
+  IN_CLINIC: 'IN_CLINIC',
+  ONLINE: 'ONLINE',
+  FOLLOW_UP: 'FOLLOW_UP',
+  EMERGENCY: 'EMERGENCY',
+} as const;
+export type ConsultationType = (typeof ConsultationType)[keyof typeof ConsultationType];
+
+export const ClinicResourceType = {
+  CONSULTATION_ROOM: 'CONSULTATION_ROOM',
+  PROCEDURE_ROOM: 'PROCEDURE_ROOM',
+  OTHER: 'OTHER',
+} as const;
+export type ClinicResourceType = (typeof ClinicResourceType)[keyof typeof ClinicResourceType];
+
+export const ClinicResourceStatus = {
+  AVAILABLE: 'AVAILABLE',
+  OCCUPIED: 'OCCUPIED',
+  MAINTENANCE: 'MAINTENANCE',
+  INACTIVE: 'INACTIVE',
+} as const;
+export type ClinicResourceStatus = (typeof ClinicResourceStatus)[keyof typeof ClinicResourceStatus];
+
+export const StaffInvitationStatus = {
+  PENDING: 'PENDING',
+  ACCEPTED: 'ACCEPTED',
+  EXPIRED: 'EXPIRED',
+  REVOKED: 'REVOKED',
+} as const;
+export type StaffInvitationStatus = (typeof StaffInvitationStatus)[keyof typeof StaffInvitationStatus];
+
+export const PatientDataVisibility = {
+  LIMITED: 'LIMITED',
+  FULL: 'FULL',
+} as const;
+export type PatientDataVisibility = (typeof PatientDataVisibility)[keyof typeof PatientDataVisibility];

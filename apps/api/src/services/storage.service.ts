@@ -9,6 +9,10 @@ import { env } from '../config/env.js';
  * far, since no cloud credentials exist yet. Swapping providers later only touches this file.
  */
 const UPLOADS_ROOT = path.resolve(process.cwd(), 'uploads');
+/// Deliberately a sibling of `uploads/`, not a subdirectory — never mounted by `express.static`
+/// (see app.ts), so a private file is unreachable without going through an authenticated,
+/// permission-checked download route (see clinic-documents module).
+const PRIVATE_UPLOADS_ROOT = path.resolve(process.cwd(), 'private-uploads');
 
 export const UPLOADS_URL_PREFIX = '/uploads';
 export const UPLOADS_DIR = UPLOADS_ROOT;
@@ -60,4 +64,31 @@ export function relativePathFromUrl(url: string): string | null {
   const index = url.indexOf(marker);
   if (index === -1) return null;
   return url.slice(index + marker.length);
+}
+
+/** Saves a file that must never be publicly reachable (clinic verification documents). Returns
+ * only a storage-relative path — never a URL — since access requires an authenticated route
+ * that re-derives clinic authorization before streaming the file back. */
+export async function savePrivateFile(input: {
+  buffer: Buffer;
+  originalName: string;
+  subdirectory: string;
+}): Promise<{ relativePath: string }> {
+  const ext = path.extname(input.originalName).toLowerCase();
+  const filename = `${randomUUID()}${ext}`;
+  const dir = path.join(PRIVATE_UPLOADS_ROOT, input.subdirectory);
+  await fs.mkdir(dir, { recursive: true });
+
+  const filePath = path.join(dir, filename);
+  await fs.writeFile(filePath, input.buffer);
+
+  return { relativePath: `${input.subdirectory}/${filename}` };
+}
+
+export function privateFilePath(relativePath: string): string {
+  return path.join(PRIVATE_UPLOADS_ROOT, relativePath);
+}
+
+export async function deletePrivateFile(relativePath: string): Promise<void> {
+  await fs.rm(privateFilePath(relativePath), { force: true });
 }

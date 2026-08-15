@@ -151,6 +151,85 @@ enum PaymentStatus {
   WAIVED
 }
 
+// ---------------------------------------------------------------------------
+// Clinic Management (Phase 6)
+// ---------------------------------------------------------------------------
+
+enum ClinicOperatingStatus {
+  OPEN
+  CLOSED
+  TEMPORARILY_CLOSED
+  SUSPENDED
+}
+
+/// Clinic-side verification state only — no Super Admin review workflow yet (Phase 6 scope).
+enum ClinicVerificationStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum ClinicDocumentType {
+  REGISTRATION_CERTIFICATE
+  LICENSE
+  TAX_DOCUMENT
+  OTHER
+}
+
+enum ClinicDocumentStatus {
+  UPLOADED
+  VERIFIED
+  REJECTED
+}
+
+/// Tri-state doctor-clinic association status, distinct from `ClinicDoctor.isActive` (kept for
+/// backward compatibility with every existing `isActive` consumer — kept in sync by the service
+/// layer: isActive = (status === ACTIVE)).
+enum ClinicDoctorStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+/// Configuration-only — no telemedicine implementation. Each ClinicDoctor association enables a
+/// subset of these.
+enum ConsultationType {
+  IN_CLINIC
+  ONLINE
+  FOLLOW_UP
+  EMERGENCY
+}
+
+enum ClinicResourceType {
+  CONSULTATION_ROOM
+  PROCEDURE_ROOM
+  OTHER
+}
+
+enum ClinicResourceStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+  INACTIVE
+}
+
+enum StaffInvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+/// Governs how much patient detail (allergies, medical conditions) clinic staff's patient
+/// quick-view surfaces — consumed by the existing Reception quick-view, not a new screen.
+enum PatientDataVisibility {
+  LIMITED
+  FULL
+}
+
 enum ConsultationStatus {
   NOT_STARTED
   IN_PROGRESS
@@ -195,13 +274,15 @@ model User {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  sessions          Session[]
-  auditLogs         AuditLog[]
-  doctorProfile     Doctor?
-  patientProfile    Patient?
-  clinicStaff       ClinicStaffMember[]
-  notifications     Notification[]
-  notificationPrefs NotificationPreference?
+  sessions             Session[]
+  auditLogs            AuditLog[]
+  doctorProfile        Doctor?
+  patientProfile       Patient?
+  clinicStaff          ClinicStaffMember[]
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference?
+  uploadedDocuments    ClinicDocument[]
+  sentStaffInvitations StaffInvitation[]
 
   @@index([role])
   @@map("users")
@@ -280,16 +361,53 @@ model Clinic {
   timezone     String  @default("Asia/Kolkata")
   isActive     Boolean @default(true)
 
+  /// Profile — legal/registration
+  legalName          String?
+  clinicType         String?
+  registrationNumber String?
+  establishedYear    Int?
+  languages          String[]
+  facilities         String[]
+  accessibilityInfo  String?
+  coverImageUrl      String?
+
+  /// Profile — contact/social
+  alternatePhone String?
+  website        String?
+  instagramUrl   String?
+  facebookUrl    String?
+  latitude       Float?
+  longitude      Float?
+
+  /// Operating status — Clinic Admin can temporarily close with a reason. Distinct from
+  /// `isActive` (platform-level enable/disable) — this is the clinic's own operating state.
+  status          ClinicOperatingStatus @default(OPEN)
+  statusReason    String?
+  statusUpdatedAt DateTime?
+
+  /// Verification — clinic-side state only, no Super Admin review workflow in this phase.
+  verificationStatus      ClinicVerificationStatus @default(PENDING)
+  verificationSubmittedAt DateTime?
+  verificationNotes       String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  doctors        ClinicDoctor[]
-  staff          ClinicStaffMember[]
-  appointments   Appointment[]
-  doctorSessions DoctorSession[]
-  doctorLeaves   DoctorLeave[]
-  auditLogs      AuditLog[]
+  doctors          ClinicDoctor[]
+  staff            ClinicStaffMember[]
+  appointments     Appointment[]
+  doctorSessions   DoctorSession[]
+  doctorLeaves     DoctorLeave[]
+  auditLogs        AuditLog[]
+  documents        ClinicDocument[]
+  departments      Department[]
+  services         ClinicService[]
+  workingHours     ClinicWorkingHours[]
+  holidays         ClinicHoliday[]
+  resources        ClinicResource[]
+  staffInvitations StaffInvitation[]
+  settings         ClinicSettings?
 
   @@index([slug])
   @@index([city])
@@ -384,6 +502,7 @@ model ClinicDoctor {
   id                                  String    @id @default(uuid())
   clinicId                            String
   doctorId                            String
+  departmentId                        String?
   isActive                            Boolean   @default(true)
   timings                             String?
   availableDays                       Weekday[]
@@ -394,14 +513,25 @@ model ClinicDoctor {
   /// this clinic (spec: doctor is read-only on delay by default, "unless authorized by clinic permissions").
   canOverrideDelay                    Boolean   @default(false)
 
+  /// Tri-state status set by Clinic Admin — kept in sync with `isActive` by the service layer
+  /// (isActive = status === ACTIVE) so every existing `isActive` consumer keeps working unchanged.
+  status            ClinicDoctorStatus @default(ACTIVE)
+  consultationTypes ConsultationType[] @default([IN_CLINIC])
+  startDate         DateTime?          @db.Date
+  endDate           DateTime?          @db.Date
+  /// Per-clinic kill switch for this doctor's queue participation, independent of `isActive`.
+  queueEnabled      Boolean            @default(true)
+
   createdAt DateTime @default(now())
 
   clinic       Clinic               @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   doctor       Doctor               @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  department   Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   availability DoctorAvailability[]
 
   @@unique([clinicId, doctorId])
   @@index([doctorId])
+  @@index([departmentId])
   @@map("clinic_doctors")
 }
 
@@ -901,6 +1031,9 @@ model ClinicStaffMember {
   id          String   @id @default(uuid())
   userId      String
   clinicId    String
+  /// No name field exists on User for staff roles (only Doctor/Patient carry a profile name) —
+  /// tracked here since it's meaningful per clinic-staff membership, not per platform account.
+  fullName    String?
   title       String?
   isActive    Boolean  @default(true)
   /// Canonical keys defined once in packages/shared/src/permissions.ts (e.g. "queue.manage",
@@ -942,4 +1075,213 @@ model AuditLog {
   @@index([actorUserId])
   @@index([clinicId, createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Clinic Management (Phase 6)
+// ---------------------------------------------------------------------------
+
+/// A verification/registration document uploaded by a Clinic Admin. Stored outside the public
+/// `/uploads` static mount (see storage.service.ts::savePrivateFile) — served only through an
+/// authenticated, permission-checked download route, never a public URL.
+model ClinicDocument {
+  id               String               @id @default(uuid())
+  clinicId         String
+  type             ClinicDocumentType
+  fileName         String
+  relativePath     String
+  fileSizeBytes    Int
+  mimeType         String
+  status           ClinicDocumentStatus @default(UPLOADED)
+  uploadedByUserId String
+
+  createdAt DateTime @default(now())
+
+  clinic     Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  uploadedBy User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, type])
+  @@map("clinic_documents")
+}
+
+model Department {
+  id           String  @id @default(uuid())
+  clinicId     String
+  name         String
+  description  String?
+  isActive     Boolean @default(true)
+  displayOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  clinicDoctors ClinicDoctor[]
+  services      ClinicService[]
+
+  @@unique([clinicId, name])
+  @@index([clinicId, isActive])
+  @@map("departments")
+}
+
+/// A billable/bookable service offered by the clinic. Price is informational only — no payment
+/// engine in this phase.
+model ClinicService {
+  id              String  @id @default(uuid())
+  clinicId        String
+  departmentId    String?
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Decimal @db.Decimal(10, 2)
+  taxApplicable   Boolean @default(false)
+  isActive        Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic     Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@unique([clinicId, name])
+  @@index([clinicId, isActive])
+  @@index([departmentId])
+  @@map("clinic_services")
+}
+
+/// One weekday's schedule for a clinic. Multiple sessions (e.g. morning + evening) live on the
+/// child `ClinicWorkingHoursSession` rows.
+model ClinicWorkingHours {
+  id       String  @id @default(uuid())
+  clinicId String
+  weekday  Weekday
+  isOpen   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic   Clinic                      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  sessions ClinicWorkingHoursSession[]
+
+  @@unique([clinicId, weekday])
+  @@map("clinic_working_hours")
+}
+
+model ClinicWorkingHoursSession {
+  id             String   @id @default(uuid())
+  workingHoursId String
+  startTime      DateTime @db.Time
+  endTime        DateTime @db.Time
+
+  workingHours ClinicWorkingHours @relation(fields: [workingHoursId], references: [id], onDelete: Cascade)
+
+  @@index([workingHoursId])
+  @@map("clinic_working_hours_sessions")
+}
+
+model ClinicHoliday {
+  id          String    @id @default(uuid())
+  clinicId    String
+  date        DateTime  @db.Date
+  name        String
+  description String?
+  isFullDay   Boolean   @default(true)
+  startTime   DateTime? @db.Time
+  endTime     DateTime? @db.Time
+
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, date])
+  @@index([clinicId, date])
+  @@map("clinic_holidays")
+}
+
+model ClinicResource {
+  id       String               @id @default(uuid())
+  clinicId String
+  name     String
+  type     ClinicResourceType
+  code     String?
+  floor    String?
+  capacity Int?
+  status   ClinicResourceStatus @default(AVAILABLE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, type])
+  @@index([clinicId, status])
+  @@map("clinic_resources")
+}
+
+/// An outstanding (or resolved) invite for someone to join a clinic's staff. Accepting either
+/// links an existing User (by email) or provisions a new one — never a duplicate account, same
+/// principle as walk-in patient linking in Reception.
+model StaffInvitation {
+  id              String                @id @default(uuid())
+  clinicId        String
+  email           String
+  role            UserRole
+  title           String?
+  permissions     String[]              @default([])
+  token           String                @unique
+  status          StaffInvitationStatus @default(PENDING)
+  invitedByUserId String
+  expiresAt       DateTime
+  acceptedAt      DateTime?
+
+  createdAt DateTime @default(now())
+
+  clinic    Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  invitedBy User   @relation(fields: [invitedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([clinicId, email])
+  @@index([clinicId, status])
+  @@map("staff_invitations")
+}
+
+/// Clinic-level configuration — the source of truth consumed by the Doctor Portal and Reception
+/// modules where noted. One row per clinic, created lazily with defaults on first read.
+model ClinicSettings {
+  id       String @id @default(uuid())
+  clinicId String @unique
+
+  /// General
+  currency String @default("INR")
+
+  /// Appointment
+  defaultConsultationDurationMinutes Int     @default(15)
+  bufferMinutes                      Int     @default(0)
+  cancellationPolicy                 String?
+  noShowPolicy                       String?
+
+  /// Queue — consumed by the existing queue engine (modules/queue-engine), which remains the
+  /// source of truth for queue *behavior*; these are inputs to it, not a parallel implementation.
+  queueEnabled             Boolean @default(true)
+  tokenPrefix              String?
+  startingTokenNumber      Int     @default(1)
+  dailyTokenReset          Boolean @default(true)
+  priorityQueueEnabled     Boolean @default(true)
+  emergencyPriorityEnabled Boolean @default(true)
+
+  /// Notifications — reuses the existing notification architecture (modules/notifications);
+  /// these are on/off switches consumed at the call sites that already emit notifications.
+  appointmentNotificationsEnabled Boolean @default(true)
+  queueNotificationsEnabled       Boolean @default(true)
+  delayNotificationsEnabled       Boolean @default(true)
+  reminderMinutesBefore           Int?    @default(60)
+
+  /// Privacy
+  patientDataVisibility PatientDataVisibility @default(LIMITED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@map("clinic_settings")
 }

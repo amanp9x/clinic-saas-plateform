@@ -14,3 +14,9 @@ export const DEMO_DOCTOR_SLUG = 'dr-aditi-sharma';
  * key — used by the Reception Portal manual smoke test and its integration tests. */
 export const DEMO_RECEPTIONIST_EMAIL = 'reception@sunrise.example';
 export const DEMO_RECEPTIONIST_PASSWORD = 'DemoPass123!';
+
+/** The seeded Clinic Admin account at Sunrise Family Clinic — CLINIC_ADMIN role bypasses the
+ * individual CLINIC_PERMISSIONS checks entirely (see reception.shared.ts::assertClinicPermission),
+ * so no explicit permissions list is needed. Used by the Clinic Management Portal smoke test. */
+export const DEMO_CLINIC_ADMIN_EMAIL = 'admin@sunrise.example';
+export const DEMO_CLINIC_ADMIN_PASSWORD = 'DemoPass123!';

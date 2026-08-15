@@ -28,6 +28,8 @@ import {
   DEMO_DOCTOR_PASSWORD,
   DEMO_RECEPTIONIST_EMAIL,
   DEMO_RECEPTIONIST_PASSWORD,
+  DEMO_CLINIC_ADMIN_EMAIL,
+  DEMO_CLINIC_ADMIN_PASSWORD,
 } from './seed-constants.js';
 
 const prisma = new PrismaClient();
@@ -1282,6 +1284,113 @@ async function seedDemoReceptionist(clinicRecords: Clinic[]): Promise<void> {
   });
 }
 
+/**
+ * Seeds a Clinic Admin account plus baseline Clinic Management data (departments, services,
+ * working hours, one resource) at Sunrise Family Clinic — without this, the Clinic Management
+ * Portal has no admin account to log in with and nothing to display.
+ * Credentials: DEMO_CLINIC_ADMIN_EMAIL / DEMO_CLINIC_ADMIN_PASSWORD.
+ */
+async function seedClinicManagement(clinicRecords: Clinic[]): Promise<void> {
+  const sunriseClinic = clinicRecords.find((c) => c.name === 'Sunrise Family Clinic')!;
+  const passwordHash = await hashPassword(DEMO_CLINIC_ADMIN_PASSWORD);
+
+  const user = await prisma.user.upsert({
+    where: { email: DEMO_CLINIC_ADMIN_EMAIL },
+    update: { passwordHash },
+    create: {
+      email: DEMO_CLINIC_ADMIN_EMAIL,
+      passwordHash,
+      role: UserRole.CLINIC_ADMIN,
+      isEmailVerified: true,
+      isActive: true,
+    },
+  });
+
+  await prisma.clinicStaffMember.upsert({
+    where: { userId_clinicId: { userId: user.id, clinicId: sunriseClinic.id } },
+    update: { permissions: ALL_CLINIC_PERMISSIONS, isActive: true },
+    create: {
+      userId: user.id,
+      clinicId: sunriseClinic.id,
+      fullName: 'Clinic Administrator',
+      title: 'Clinic Admin',
+      permissions: ALL_CLINIC_PERMISSIONS,
+    },
+  });
+
+  const departmentDefs = [
+    { name: 'General Medicine', description: 'General consultations and check-ups' },
+    { name: 'Cardiology', description: 'Heart and cardiovascular care' },
+    { name: 'Dermatology', description: 'Skin, hair, and nail care' },
+  ];
+  const departments = [];
+  for (let i = 0; i < departmentDefs.length; i++) {
+    const d = departmentDefs[i]!;
+    departments.push(
+      await prisma.department.upsert({
+        where: { clinicId_name: { clinicId: sunriseClinic.id, name: d.name } },
+        update: {},
+        create: { clinicId: sunriseClinic.id, name: d.name, description: d.description, displayOrder: i },
+      }),
+    );
+  }
+
+  const serviceDefs = [
+    { name: 'General Consultation', description: 'Standard doctor consultation', departmentId: departments[0]!.id, durationMinutes: 15, price: 500 },
+    { name: 'Cardiac Screening', description: 'Routine cardiac health screening', departmentId: departments[1]!.id, durationMinutes: 30, price: 1200 },
+    { name: 'Follow-up Visit', description: 'Follow-up on a prior consultation', departmentId: departments[0]!.id, durationMinutes: 10, price: 300 },
+  ];
+  for (const s of serviceDefs) {
+    await prisma.clinicService.upsert({
+      where: { clinicId_name: { clinicId: sunriseClinic.id, name: s.name } },
+      update: {},
+      create: {
+        clinicId: sunriseClinic.id,
+        name: s.name,
+        description: s.description,
+        departmentId: s.departmentId,
+        durationMinutes: s.durationMinutes,
+        price: s.price,
+        taxApplicable: false,
+      },
+    });
+  }
+
+  const weekdays = [Weekday.MON, Weekday.TUE, Weekday.WED, Weekday.THU, Weekday.FRI, Weekday.SAT];
+  for (const weekday of weekdays) {
+    const workingHours = await prisma.clinicWorkingHours.upsert({
+      where: { clinicId_weekday: { clinicId: sunriseClinic.id, weekday } },
+      update: {},
+      create: { clinicId: sunriseClinic.id, weekday, isOpen: true },
+    });
+    const existingSessions = await prisma.clinicWorkingHoursSession.count({ where: { workingHoursId: workingHours.id } });
+    if (existingSessions === 0) {
+      await prisma.clinicWorkingHoursSession.createMany({
+        data: [
+          { workingHoursId: workingHours.id, startTime: new Date('1970-01-01T09:00:00.000Z'), endTime: new Date('1970-01-01T13:00:00.000Z') },
+          { workingHoursId: workingHours.id, startTime: new Date('1970-01-01T17:00:00.000Z'), endTime: new Date('1970-01-01T21:00:00.000Z') },
+        ],
+      });
+    }
+  }
+  await prisma.clinicWorkingHours.upsert({
+    where: { clinicId_weekday: { clinicId: sunriseClinic.id, weekday: Weekday.SUN } },
+    update: {},
+    create: { clinicId: sunriseClinic.id, weekday: Weekday.SUN, isOpen: false },
+  });
+
+  const existingResources = await prisma.clinicResource.count({ where: { clinicId: sunriseClinic.id } });
+  if (existingResources === 0) {
+    await prisma.clinicResource.createMany({
+      data: [
+        { clinicId: sunriseClinic.id, name: 'Consultation Room 1', type: 'CONSULTATION_ROOM', code: 'CR-1', floor: 'Ground Floor', capacity: 2 },
+        { clinicId: sunriseClinic.id, name: 'Consultation Room 2', type: 'CONSULTATION_ROOM', code: 'CR-2', floor: 'Ground Floor', capacity: 2 },
+        { clinicId: sunriseClinic.id, name: 'Procedure Room', type: 'PROCEDURE_ROOM', code: 'PR-1', floor: '1st Floor', capacity: 4 },
+      ],
+    });
+  }
+}
+
 async function main() {
   console.log('Seeding specializations...');
   const specializationRecords = await Promise.all(
@@ -1431,6 +1540,9 @@ async function main() {
 
   console.log('Seeding demo receptionist...');
   await seedDemoReceptionist(clinicRecords);
+
+  console.log('Seeding clinic management demo data...');
+  await seedClinicManagement(clinicRecords);
 
   console.log('Seeding testimonials...');
   const existingTestimonials = await prisma.testimonial.count();

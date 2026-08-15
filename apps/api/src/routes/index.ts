@@ -18,6 +18,16 @@ import { receptionRouter } from '../modules/reception/reception.routes.js';
 import { receptionCheckinRouter } from '../modules/reception-checkin/reception-checkin.routes.js';
 import { receptionQueueRouter } from '../modules/reception-queue/reception-queue.routes.js';
 import { receptionAppointmentsRouter } from '../modules/reception-appointments/reception-appointments.routes.js';
+import { clinicRouter } from '../modules/clinic/clinic.routes.js';
+import { clinicDoctorsRouter } from '../modules/clinic-doctors/clinic-doctors.routes.js';
+import { clinicDepartmentsRouter } from '../modules/clinic-departments/clinic-departments.routes.js';
+import { clinicServicesRouter } from '../modules/clinic-services/clinic-services.routes.js';
+import { clinicScheduleRouter } from '../modules/clinic-schedule/clinic-schedule.routes.js';
+import { clinicHolidaysRouter } from '../modules/clinic-holidays/clinic-holidays.routes.js';
+import { clinicResourcesRouter } from '../modules/clinic-resources/clinic-resources.routes.js';
+import { clinicStaffRouter } from '../modules/clinic-staff/clinic-staff.routes.js';
+import { clinicAuditRouter } from '../modules/clinic-audit/clinic-audit.routes.js';
+import { clinicReportsRouter } from '../modules/clinic-reports/clinic-reports.routes.js';
 
 export const apiRouter = Router();
 
@@ -45,3 +55,19 @@ apiRouter.use('/reception', receptionRouter);
 apiRouter.use('/reception', receptionCheckinRouter);
 apiRouter.use('/reception/queue', receptionQueueRouter);
 apiRouter.use('/reception', receptionAppointmentsRouter);
+
+// --- Clinic Management (Phase 6) ---------------------------------------------
+// More specific `/clinic/*` prefixes are mounted before the bare `/clinic` router — Express
+// tries mount prefixes in registration order, so `/clinic` (registered first) would otherwise
+// swallow every `/clinic/xxx/...` request into its own auth gate before falling through, which
+// breaks clinicStaffRouter's one public route (invitation acceptance has no session yet).
+apiRouter.use('/clinic/doctors', clinicDoctorsRouter);
+apiRouter.use('/clinic/departments', clinicDepartmentsRouter);
+apiRouter.use('/clinic/services', clinicServicesRouter);
+apiRouter.use('/clinic/schedule', clinicScheduleRouter);
+apiRouter.use('/clinic/holidays', clinicHolidaysRouter);
+apiRouter.use('/clinic/resources', clinicResourcesRouter);
+apiRouter.use('/clinic/staff', clinicStaffRouter);
+apiRouter.use('/clinic/audit-logs', clinicAuditRouter);
+apiRouter.use('/clinic/reports', clinicReportsRouter);
+apiRouter.use('/clinic', clinicRouter);

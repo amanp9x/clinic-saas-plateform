@@ -46,6 +46,18 @@ export const SOCKET_EVENTS = {
   NOTIFICATION: {
     CREATED: 'notification.created',
   },
+  CLINIC: {
+    UPDATED: 'clinic.updated',
+    STATUS_UPDATED: 'clinic.status.updated',
+    SCHEDULE_UPDATED: 'clinic.schedule.updated',
+    QUEUE_SETTINGS_UPDATED: 'queue.settings.updated',
+  },
+  DOCTOR_ASSOCIATION: {
+    UPDATED: 'doctor.association.updated',
+  },
+  STAFF: {
+    UPDATED: 'staff.updated',
+  },
 } as const;
 
 /** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization;
