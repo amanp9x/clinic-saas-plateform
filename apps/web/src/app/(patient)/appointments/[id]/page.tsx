@@ -2,11 +2,11 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { toast } from 'sonner';
 import { ArrowLeft, CalendarClock, MapPin, Phone, Receipt } from 'lucide-react';
 import { useAppointment } from '@/hooks/patient/use-appointments';
 import { AppointmentStatusBadge } from '@/components/patient/appointment-status-badge';
 import { CancelAppointmentDialog } from '@/components/patient/cancel-appointment-dialog';
+import { RescheduleAppointmentDialog } from '@/components/patient/reschedule-appointment-dialog';
 import { EmptyState } from '@/components/marketing/empty-state';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -125,14 +125,10 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
               </Button>
             )}
             {canCancel && (
-              <Button
-                variant="outline"
-                onClick={() =>
-                  toast.info('Rescheduling is coming soon. Please cancel and book a new appointment for now.')
-                }
-              >
-                Reschedule
-              </Button>
+              <RescheduleAppointmentDialog
+                appointment={appointment}
+                trigger={<Button variant="outline">Reschedule</Button>}
+              />
             )}
             {canCancel && (
               <CancelAppointmentDialog

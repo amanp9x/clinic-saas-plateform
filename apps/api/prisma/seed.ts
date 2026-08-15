@@ -21,6 +21,7 @@ import {
 import { ALL_CLINIC_PERMISSIONS } from '@clinic/shared';
 import { slugify } from '../src/utils/slugify.js';
 import { hashPassword } from '../src/utils/password.js';
+import { generateBookingReference } from '../src/modules/booking/booking-reference.util.js';
 import {
   DEMO_PATIENT_EMAIL,
   DEMO_PATIENT_PASSWORD,
@@ -560,6 +561,7 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
         status: AppointmentStatus.CONFIRMED,
         reasonForVisit: 'Routine cardiac checkup',
         consultationFee: cardiologist.consultationFee,
+        bookingReference: generateBookingReference(),
       },
     });
 
@@ -573,6 +575,7 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
         tokenNumber: '24',
         reasonForVisit: 'Persistent cough and mild fever',
         consultationFee: physician.consultationFee,
+        bookingReference: generateBookingReference(),
       },
     });
 
@@ -586,6 +589,7 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
         completedAt: daysFromNow(-20, 10, 25),
         reasonForVisit: 'Skin allergy follow-up',
         consultationFee: dermatologist.consultationFee,
+        bookingReference: generateBookingReference(),
       },
     });
 
@@ -599,6 +603,7 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
         completedAt: daysFromNow(-45, 10, 0),
         reasonForVisit: 'Routine dental cleaning',
         consultationFee: dentist.consultationFee,
+        bookingReference: generateBookingReference(),
       },
     });
 
@@ -612,6 +617,7 @@ async function seedDemoPatient(doctorRecords: Doctor[], clinicRecords: Clinic[])
         cancelReason: 'Schedule conflict — rebooking separately',
         cancelledAt: daysFromNow(-11, 9, 0),
         reasonForVisit: 'Knee pain evaluation',
+        bookingReference: generateBookingReference(),
       },
     });
 
@@ -938,6 +944,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       tokenNumber: '1',
       reasonForVisit: 'Chest discomfort on exertion for 2 weeks',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   const appt2 = await prisma.appointment.create({
@@ -951,6 +958,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       tokenNumber: '2',
       reasonForVisit: 'Blood pressure follow-up',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   const appt3 = await prisma.appointment.create({
@@ -963,6 +971,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       tokenNumber: '3',
       reasonForVisit: 'Palpitations',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   const appt4 = await prisma.appointment.create({
@@ -975,6 +984,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       tokenNumber: '4',
       reasonForVisit: 'Annual cardiac screening',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   const appt5 = await prisma.appointment.create({
@@ -987,6 +997,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       tokenNumber: '5',
       reasonForVisit: 'Post-angioplasty review',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
 
@@ -1201,6 +1212,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       completedAt: daysFromNow(-2, 11, 20),
       reasonForVisit: 'Routine checkup',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   await prisma.appointment.create({
@@ -1213,6 +1225,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       completedAt: daysFromNow(-10, 12, 15),
       reasonForVisit: 'Follow-up',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   await prisma.appointment.create({
@@ -1225,6 +1238,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       completedAt: daysFromNow(-20, 9, 20),
       reasonForVisit: 'Consultation',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
   await prisma.appointment.create({
@@ -1235,6 +1249,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       scheduledAt: daysFromNow(-3, 10, 0),
       status: AppointmentStatus.NO_SHOW,
       reasonForVisit: 'Skin check',
+      bookingReference: generateBookingReference(),
     },
   });
   await prisma.appointment.create({
@@ -1246,6 +1261,7 @@ async function seedDoctorPortal(doctorRecords: Doctor[], clinicRecords: Clinic[]
       status: AppointmentStatus.CONFIRMED,
       reasonForVisit: 'Post-treatment review',
       consultationFee: doctor.consultationFee,
+      bookingReference: generateBookingReference(),
     },
   });
 }

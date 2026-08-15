@@ -42,6 +42,14 @@ export const SOCKET_EVENTS = {
   },
   APPOINTMENT: {
     UPDATED: 'appointment.updated',
+    CREATED: 'appointment.created',
+    RESCHEDULED: 'appointment.rescheduled',
+    CANCELLED: 'appointment.cancelled',
+  },
+  SLOT: {
+    HELD: 'slot.held',
+    RELEASED: 'slot.released',
+    UPDATED: 'slot.updated',
   },
   NOTIFICATION: {
     CREATED: 'notification.created',

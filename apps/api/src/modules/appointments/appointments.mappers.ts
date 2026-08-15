@@ -4,6 +4,7 @@ import type { AppointmentWithRelations } from './appointments.repository.js';
 export function toAppointmentSummary(appointment: AppointmentWithRelations): AppointmentSummaryDto {
   return {
     id: appointment.id,
+    bookingReference: appointment.bookingReference,
     doctorId: appointment.doctorId,
     doctorName: appointment.doctor.displayName,
     doctorSlug: appointment.doctor.slug,
@@ -13,6 +14,9 @@ export function toAppointmentSummary(appointment: AppointmentWithRelations): App
     clinicName: appointment.clinic.name,
     clinicCity: appointment.clinic.city,
     scheduledAt: appointment.scheduledAt.toISOString(),
+    durationMinutes: appointment.durationMinutes,
+    consultationType: appointment.consultationType,
+    appointmentType: appointment.appointmentType,
     status: appointment.status,
     tokenNumber: appointment.tokenNumber,
     reasonForVisit: appointment.reasonForVisit,
@@ -31,6 +35,9 @@ export function toAppointmentDetail(appointment: AppointmentWithRelations): Appo
     cancelReason: appointment.cancelReason,
     cancelledAt: appointment.cancelledAt ? appointment.cancelledAt.toISOString() : null,
     completedAt: appointment.completedAt ? appointment.completedAt.toISOString() : null,
+    rescheduledAt: appointment.rescheduledAt ? appointment.rescheduledAt.toISOString() : null,
+    previousScheduledAt: appointment.previousScheduledAt ? appointment.previousScheduledAt.toISOString() : null,
+    rescheduleCount: appointment.rescheduleCount,
     createdAt: appointment.createdAt.toISOString(),
   };
 }

@@ -1,11 +1,15 @@
 import { CLINIC_PERMISSIONS, type UserRole } from '@clinic/shared';
 import type {
+  BookingConfirmationDto,
   PaginatedResult,
   PatientQuickViewDto,
   PatientSearchResultDto,
   ReceptionAppointmentDetailDto,
   ReceptionAppointmentListQuery,
   ReceptionAppointmentSummaryDto,
+  ReceptionCancelAppointmentInput,
+  ReceptionCreateAppointmentInput,
+  RescheduleAppointmentInput,
 } from '@clinic/shared';
 import type { TokenPriority, TokenStatus } from '@prisma/client';
 import { receptionAppointmentsRepository } from './reception-appointments.repository.js';
@@ -14,6 +18,12 @@ import { queueRepository } from '../doctor-queue/queue.repository.js';
 import { assertClinicPermission } from '../reception/reception.shared.js';
 import { calculateAge } from '../../utils/age.js';
 import { NotFoundError } from '../../utils/app-error.js';
+import { bookingEngine } from '../booking/booking.engine.js';
+import { bookingRepository } from '../booking/booking.repository.js';
+import { toBookingConfirmationDto } from '../booking/booking.mappers.js';
+import { queueEngine } from '../queue-engine/queue-engine.service.js';
+import { doctorAppointmentsRepository } from '../doctor-appointments/doctor-appointments.repository.js';
+import { doctorAppointmentsEngine } from '../doctor-appointments/doctor-appointments.service.js';
 
 async function queuePositionFor(token: { id: string; status: TokenStatus; doctorSessionId: string; priority: TokenPriority; tokenNumber: number } | null | undefined) {
   if (!token) return null;
@@ -80,5 +90,82 @@ export const receptionAppointmentsService = {
         ? toReceptionAppointmentSummary({ ...todayAppointment, patient }, await queuePositionFor(todayAppointment.queueToken))
         : null,
     };
+  },
+
+  /** Uses the same centralized booking engine as the patient self-booking flow — no parallel
+   * slot logic for reception. Patient resolution reuses `queueEngine.resolveWalkInPatient`
+   * (search-existing-or-create-new), the same function the walk-in flow already uses. */
+  async create(userId: string, role: UserRole, input: ReceptionCreateAppointmentInput): Promise<BookingConfirmationDto> {
+    await assertClinicPermission(userId, role, input.clinicId, CLINIC_PERMISSIONS.APPOINTMENT_MANAGE);
+
+    // `resolveWalkInPatient` handles both branches: an existing patient by id (any patient, not
+    // just one who already has a prior appointment at this clinic — booking their first
+    // appointment here is exactly the common case) or provisioning a new patient record.
+    const patient = await queueEngine.resolveWalkInPatient({
+      existingPatientId: input.patientId,
+      fullName: input.newPatient?.fullName,
+      phone: input.newPatient?.phone,
+      age: input.newPatient?.age,
+      gender: input.newPatient?.gender,
+    });
+
+    const appointment = await bookingEngine.book({
+      actorUserId: userId,
+      patientId: patient.id,
+      bookingSource: 'RECEPTION',
+      holdId: input.holdId,
+      doctorId: input.doctorId,
+      clinicId: input.clinicId,
+      scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
+      consultationType: input.consultationType,
+      appointmentType: input.appointmentType,
+      reasonForVisit: input.reasonForVisit,
+    });
+    return toBookingConfirmationDto(appointment);
+  },
+
+  async reschedule(userId: string, role: UserRole, clinicId: string, appointmentId: string, input: RescheduleAppointmentInput) {
+    await assertClinicPermission(userId, role, clinicId, CLINIC_PERMISSIONS.APPOINTMENT_MANAGE);
+    const existing = await bookingRepository.findAppointmentByIdForActor(appointmentId);
+    if (!existing || existing.clinicId !== clinicId) {
+      throw new NotFoundError('Appointment');
+    }
+    const updated = await bookingEngine.reschedule(appointmentId, userId, 'RECEPTION', {
+      newScheduledAt: new Date(input.newScheduledAt),
+      holdId: input.holdId,
+      reason: input.reason,
+    });
+    return toReceptionAppointmentDetail(
+      { ...updated, queueToken: null },
+      null,
+    );
+  },
+
+  async cancel(userId: string, role: UserRole, clinicId: string, appointmentId: string, input: ReceptionCancelAppointmentInput) {
+    await assertClinicPermission(userId, role, clinicId, CLINIC_PERMISSIONS.APPOINTMENT_MANAGE);
+    const existing = await bookingRepository.findAppointmentByIdForActor(appointmentId);
+    if (!existing || existing.clinicId !== clinicId) {
+      throw new NotFoundError('Appointment');
+    }
+    const cancelled = await bookingEngine.cancelCore(existing, { reason: input.reason, actorUserId: userId, source: 'RECEPTION' });
+    return toReceptionAppointmentDetail(
+      { ...cancelled, queueToken: null },
+      null,
+    );
+  },
+
+  /** Thin delegate to the existing, already-tested `doctorAppointmentsEngine.markNoShow` — zero
+   * new no-show logic. */
+  async markNoShow(userId: string, role: UserRole, clinicId: string, appointmentId: string) {
+    await assertClinicPermission(userId, role, clinicId, CLINIC_PERMISSIONS.APPOINTMENT_MANAGE);
+    const basic = await bookingRepository.findAppointmentByIdForActor(appointmentId);
+    if (!basic || basic.clinicId !== clinicId) {
+      throw new NotFoundError('Appointment');
+    }
+    const appointment = await doctorAppointmentsRepository.findById(appointmentId, basic.doctorId);
+    if (!appointment) {
+      throw new NotFoundError('Appointment');
+    }
+    return doctorAppointmentsEngine.markNoShow(appointment, userId);
   },
 };

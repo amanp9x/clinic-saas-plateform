@@ -208,7 +208,13 @@ export default async function ClinicProfilePage({ params }: { params: Promise<Pa
               <p className="text-muted-foreground text-sm">
                 Browse doctors above and book an appointment at {clinic.name}.
               </p>
-              <BookAppointmentButton doctorName={clinic.name} />
+              {clinic.doctors.length === 1 && (
+                <BookAppointmentButton
+                  doctorId={clinic.doctors[0]!.id}
+                  doctorName={clinic.doctors[0]!.displayName}
+                  clinicId={clinic.id}
+                />
+              )}
             </CardContent>
           </Card>
         </aside>

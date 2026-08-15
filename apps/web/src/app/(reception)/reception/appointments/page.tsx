@@ -7,6 +7,7 @@ import { useSelectedClinic } from '@/hooks/reception/use-selected-clinic';
 import { useReceptionDoctorStatuses } from '@/hooks/reception/use-reception-doctors';
 import { useReceptionAppointments } from '@/hooks/reception/use-reception-appointments';
 import { AppointmentTable } from '@/components/reception/appointment-table';
+import { AddAppointmentDialog } from '@/components/reception/add-appointment-dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -49,6 +50,9 @@ function AppointmentsContent() {
           <p className="text-muted-foreground text-sm">Check in patients and review the day&apos;s schedule.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {clinicId && (
+            <AddAppointmentDialog clinicId={clinicId} trigger={<Button size="sm">Add Appointment</Button>} />
+          )}
           {clinics.length > 1 && (
             <Select value={clinicId} onValueChange={updateClinic}>
               <SelectTrigger className="w-52">

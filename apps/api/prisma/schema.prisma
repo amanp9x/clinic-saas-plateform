@@ -65,6 +65,30 @@ enum AppointmentStatus {
   NO_SHOW
 }
 
+enum BookingSource {
+  PATIENT
+  RECEPTION
+  DOCTOR
+}
+
+/// "First visit vs repeat visit" — deliberately separate from ConsultationType, which already
+/// means modality (IN_CLINIC/ONLINE) and carries legacy FOLLOW_UP/EMERGENCY values used by the
+/// ClinicDoctor.consultationTypes catalog-search filter. Reusing ConsultationType here would
+/// corrupt that already-shipped filter semantics.
+enum AppointmentType {
+  NEW_CONSULTATION
+  FOLLOW_UP
+}
+
+/// SlotHold lifecycle only — deliberately 3 states, not the "6 slot states" product concept
+/// (AVAILABLE/HELD/BOOKED/BLOCKED/EXPIRED/CANCELLED), which is a read-time display computation
+/// derived from Appointment + SlotHold + BlockedSlot together, not a persisted state machine.
+enum SlotHoldStatus {
+  ACTIVE
+  EXPIRED
+  RELEASED
+}
+
 enum LabReportStatus {
   PENDING
   READY
@@ -410,6 +434,8 @@ model Clinic {
   staffInvitations StaffInvitation[]
   settings         ClinicSettings?
   favorites        Favorite[]
+  slotHolds        SlotHold[]
+  blockedSlots     BlockedSlot[]
 
   @@index([slug])
   @@index([city])
@@ -496,6 +522,8 @@ model Doctor {
   medicalRecords MedicalRecord[]
   consultations  Consultation[]
   favorites      Favorite[]
+  slotHolds      SlotHold[]
+  blockedSlots   BlockedSlot[]
 
   @@index([slug])
   @@index([specializationId])
@@ -838,6 +866,7 @@ model Patient {
   queueTokens    QueueToken[]
   consultations  Consultation[]
   favorites      Favorite[]
+  slotHolds      SlotHold[]
 
   @@map("patients")
 }
@@ -867,6 +896,14 @@ model PatientAddress {
 // Patient Portal: appointments, records, notifications
 // ---------------------------------------------------------------------------
 
+/// Booking-engine fields (Phase 8) are additive to the pre-existing walk-in/queue fields above.
+/// IMPORTANT: double-booking is NOT prevented by any constraint expressible here — Postgres
+/// partial unique indexes aren't representable in the Prisma schema DSL. The actual guarantee is
+/// a hand-added migration statement:
+///   CREATE UNIQUE INDEX "appointments_doctor_clinic_scheduled_active_key" ON "appointments"
+///     ("doctorId", "clinicId", "scheduledAt") WHERE "status" NOT IN ('CANCELLED', 'NO_SHOW');
+/// `prisma migrate diff`/`db pull` will permanently show this as one line of "drift" — expected,
+/// not a bug. Do not "fix" it by adding a conflicting @@unique here.
 model Appointment {
   id              String            @id @default(uuid())
   patientId       String
@@ -883,6 +920,30 @@ model Appointment {
   cancelledAt     DateTime?
   completedAt     DateTime?
 
+  /// Human-friendly, publicly-safe reference (e.g. "APT-20260815-8F4K2") — never the row id.
+  bookingReference String @unique
+  /// Always server-derived from the authenticated actor's role — never accepted from the client.
+  bookingSource    BookingSource    @default(PATIENT)
+  appointmentType  AppointmentType  @default(NEW_CONSULTATION)
+  /// Modality only (IN_CLINIC/ONLINE) — booking input validation rejects FOLLOW_UP/EMERGENCY here.
+  consultationType ConsultationType @default(IN_CLINIC)
+  /// Snapshotted at booking/reschedule time — later ClinicSettings/ClinicDoctor config changes
+  /// must never retroactively change historical appointments.
+  durationMinutes    Int?
+  bufferMinutesAfter Int?
+
+  // --- Reschedule metadata (same row, updated in place — no separate linked row) ---
+  previousScheduledAt DateTime?
+  rescheduledAt       DateTime?
+  rescheduledByUserId String?
+  rescheduleReason    String?
+  rescheduleCount     Int       @default(0)
+
+  // --- Cancellation metadata (extends cancelReason/cancelledAt above) ---
+  cancelledByUserId          String?
+  cancelSource                BookingSource?
+  previousStatusBeforeCancel  AppointmentStatus?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -896,8 +957,68 @@ model Appointment {
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
+  @@index([clinicId, scheduledAt])
   @@index([status])
   @@map("appointments")
+}
+
+/// One row per (doctorId, clinicId, scheduledAt) tuple, recycled across its lifecycle (never
+/// deleted — status flips ACTIVE→RELEASED/EXPIRED and back to ACTIVE on reclaim). Because there
+/// is only ever one row per slot at a time, a plain (non-partial) unique constraint is enough
+/// here — unlike Appointment, which needs the hand-added partial index described above.
+/// `status = 'ACTIVE'` is necessary but NOT sufficient to treat a row as holding a slot — every
+/// reader must also check `expiresAt > now()`; there is no background sweep (no job/cron
+/// infrastructure exists anywhere in this codebase), so expiry is resolved lazily, only when a
+/// later claim attempt reclaims the stale row.
+model SlotHold {
+  id               String           @id @default(uuid())
+  doctorId         String
+  clinicId         String
+  scheduledAt      DateTime
+  durationMinutes  Int
+  patientId        String
+  heldByUserId     String
+  bookingSource    BookingSource
+  consultationType ConsultationType
+  status           SlotHoldStatus   @default(ACTIVE)
+  expiresAt        DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, clinicId, scheduledAt])
+  @@index([expiresAt, status])
+  @@index([patientId])
+  @@map("slot_holds")
+}
+
+/// Arbitrary time-range block set by a doctor or authorized clinic staff — not slot-grid-aligned.
+/// `doctorId = null` means a clinic-wide block. No uniqueness constraint: overlapping blocks are
+/// harmless (their union is what matters for availability filtering).
+model BlockedSlot {
+  id                String    @id @default(uuid())
+  doctorId          String?
+  clinicId          String
+  startAt           DateTime
+  endAt             DateTime
+  reason            String
+  createdByUserId   String
+  isActive          Boolean   @default(true)
+  unblockedAt       DateTime?
+  unblockedByUserId String?
+
+  createdAt DateTime @default(now())
+
+  doctor Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId, startAt])
+  @@index([doctorId, startAt])
+  @@map("blocked_slots")
 }
 
 model Prescription {

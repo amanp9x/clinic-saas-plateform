@@ -1,5 +1,6 @@
 import type { Weekday } from '@prisma/client';
 import { weekdayForDate } from './weekday.js';
+import { timeMinutes, formatTime } from './time.util.js';
 
 export interface AvailabilityTemplateRow {
   weekday: Weekday;
@@ -25,30 +26,20 @@ export interface NextAvailableResult {
   endTime: string;
 }
 
-function toUtcDateOnly(d: Date): Date {
+/** Reused by the Phase 8 slot-generation engine — kept here since day-level availability and
+ * slot-level availability are natural siblings operating on the same date-math primitives. */
+export function toUtcDateOnly(d: Date): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-function addDays(d: Date, days: number): Date {
+export function addDays(d: Date, days: number): Date {
   const copy = new Date(d);
   copy.setUTCDate(copy.getUTCDate() + days);
   return copy;
 }
 
-function isoDateOnly(d: Date): string {
+export function isoDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
-}
-
-/** @db.Time fields round-trip through Prisma as a 1970-01-01 UTC date carrying only the
- * wall-clock time — this reads that time back out as minutes-since-midnight. `from` is compared
- * on the same basis (its UTC hour/minute), so the two sides stay internally consistent regardless
- * of server deployment timezone — no clinic-timezone-aware conversion exists in this codebase. */
-function timeMinutes(t: Date): number {
-  return t.getUTCHours() * 60 + t.getUTCMinutes();
-}
-
-function formatTime(t: Date): string {
-  return t.toISOString().slice(11, 16);
 }
 
 /**

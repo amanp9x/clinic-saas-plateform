@@ -1,4 +1,4 @@
-import type { AppointmentStatus, Gender } from '../enums.js';
+import type { AppointmentStatus, AppointmentType, ConsultationType, Gender } from '../enums.js';
 
 export interface PatientAddressDto {
   id: string;
@@ -32,6 +32,7 @@ export interface PatientProfileDto {
 
 export interface AppointmentSummaryDto {
   id: string;
+  bookingReference: string;
   doctorId: string;
   doctorName: string;
   doctorSlug: string;
@@ -41,6 +42,9 @@ export interface AppointmentSummaryDto {
   clinicName: string;
   clinicCity: string | null;
   scheduledAt: string;
+  durationMinutes: number | null;
+  consultationType: ConsultationType;
+  appointmentType: AppointmentType;
   status: AppointmentStatus;
   tokenNumber: string | null;
   reasonForVisit: string | null;
@@ -54,6 +58,9 @@ export interface AppointmentDetailDto extends AppointmentSummaryDto {
   cancelReason: string | null;
   cancelledAt: string | null;
   completedAt: string | null;
+  rescheduledAt: string | null;
+  previousScheduledAt: string | null;
+  rescheduleCount: number;
   createdAt: string;
 }
 

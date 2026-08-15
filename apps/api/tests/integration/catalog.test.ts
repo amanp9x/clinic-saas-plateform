@@ -81,9 +81,13 @@ describe('GET /api/v1/catalog/doctors', () => {
 
 describe('GET /api/v1/catalog/doctors/:slug', () => {
   it('returns full doctor detail with reviews and an honest inactive queue status', async () => {
-    const res = await request(app).get('/api/v1/catalog/doctors/dr-aditi-sharma');
+    // dr-aditi-sharma is the doctor-portal demo doctor and always has a live queue session
+    // seeded for "today" (seed.ts::seedDoctorPortal) — use a doctor the seed never gives a
+    // queue session to, so this genuinely tests the honest-inactive path rather than relying
+    // on stale seed dates to coincidentally make an active doctor look inactive.
+    const res = await request(app).get('/api/v1/catalog/doctors/dr-rohan-mehta');
     expect(res.status).toBe(200);
-    expect(res.body.data.doctor.displayName).toBe('Dr. Aditi Sharma');
+    expect(res.body.data.doctor.displayName).toBe('Dr. Rohan Mehta');
     expect(res.body.data.doctor.reviews.length).toBeGreaterThan(0);
     expect(res.body.data.doctor.clinics.length).toBeGreaterThan(0);
     expect(res.body.data.doctor.queueStatus).toEqual({

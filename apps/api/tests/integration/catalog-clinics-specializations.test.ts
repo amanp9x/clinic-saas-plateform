@@ -82,7 +82,10 @@ describe('GET /api/v1/catalog/doctors — extended filters', () => {
   });
 
   it('filters by language', async () => {
-    const res = await request(app).get('/api/v1/catalog/doctors?languages=Hindi');
+    // limit=50: default ratingCount-desc sort + a shared default-page-1 size can tie this
+    // fixture's rating against leftover same-pattern fixture doctors from prior test runs
+    // (never cleaned up between runs), so page through the max page size instead of page 1.
+    const res = await request(app).get('/api/v1/catalog/doctors?languages=Hindi&limit=50');
     expect(res.status).toBe(200);
     expect(res.body.data.items.some((d: { id: string }) => d.id === doctorId)).toBe(true);
     for (const doctor of res.body.data.items) {

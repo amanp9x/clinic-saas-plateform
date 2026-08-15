@@ -247,7 +247,11 @@ export default async function DoctorProfilePage({ params }: { params: Promise<Pa
                 <span className="text-muted-foreground text-sm">Consultation fee</span>
                 <span className="text-lg font-semibold">{formatFee(doctor.consultationFee)}</span>
               </div>
-              <BookAppointmentButton doctorName={doctor.displayName} />
+              <BookAppointmentButton
+                doctorId={doctor.id}
+                doctorName={doctor.displayName}
+                clinicId={doctor.clinics[0]?.clinicId}
+              />
               <p className="text-muted-foreground text-center text-xs">
                 No payment required to view availability.
               </p>

@@ -33,6 +33,41 @@ export const AppointmentStatus = {
 } as const;
 export type AppointmentStatus = (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
 
+export const BookingSource = {
+  PATIENT: 'PATIENT',
+  RECEPTION: 'RECEPTION',
+  DOCTOR: 'DOCTOR',
+} as const;
+export type BookingSource = (typeof BookingSource)[keyof typeof BookingSource];
+
+/** "First visit vs repeat visit" — deliberately separate from ConsultationType, which already
+ * means modality (IN_CLINIC/ONLINE) and carries legacy FOLLOW_UP/EMERGENCY values used by the
+ * catalog-search filter on ClinicDoctor.consultationTypes. */
+export const AppointmentType = {
+  NEW_CONSULTATION: 'NEW_CONSULTATION',
+  FOLLOW_UP: 'FOLLOW_UP',
+} as const;
+export type AppointmentType = (typeof AppointmentType)[keyof typeof AppointmentType];
+
+/** SlotHold lifecycle only — not the product-facing "6 slot states" (AVAILABLE/HELD/BOOKED/
+ * BLOCKED/EXPIRED/CANCELLED), which is a read-time display computation, not a persisted state. */
+export const SlotHoldStatus = {
+  ACTIVE: 'ACTIVE',
+  EXPIRED: 'EXPIRED',
+  RELEASED: 'RELEASED',
+} as const;
+export type SlotHoldStatus = (typeof SlotHoldStatus)[keyof typeof SlotHoldStatus];
+
+/** Display-only status for a single generated slot in an availability response — never persisted
+ * as-is; derived live from Appointment/SlotHold/BlockedSlot at read time. */
+export const SlotStatus = {
+  AVAILABLE: 'AVAILABLE',
+  HELD: 'HELD',
+  BOOKED: 'BOOKED',
+  BLOCKED: 'BLOCKED',
+} as const;
+export type SlotStatus = (typeof SlotStatus)[keyof typeof SlotStatus];
+
 /** Doctor's manually-set availability/session status for a clinic session. Staff-controlled, never inferred. */
 export const DoctorSessionStatus = {
   NOT_ARRIVED: 'NOT_ARRIVED',

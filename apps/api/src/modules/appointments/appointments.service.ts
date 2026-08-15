@@ -1,19 +1,25 @@
-import { AppointmentStatus, NotificationType } from '@prisma/client';
-import type { AppointmentListQuery, CancelAppointmentInput, PaginatedResult, QueueViewDto } from '@clinic/shared';
-import type { AppointmentDetailDto, AppointmentSummaryDto } from '@clinic/shared';
+import { AppointmentStatus } from '@prisma/client';
+import type {
+  AppointmentListQuery,
+  AvailabilityQuery,
+  CancelAppointmentInput,
+  CreateAppointmentInput,
+  HoldSlotInput,
+  PaginatedResult,
+  QueueViewDto,
+  RescheduleAppointmentInput,
+} from '@clinic/shared';
+import type { AppointmentDetailDto, AppointmentSummaryDto, AvailabilityResultDto, BookingConfirmationDto, SlotHoldDto } from '@clinic/shared';
 import { appointmentsRepository } from './appointments.repository.js';
 import { toAppointmentDetail, toAppointmentSummary } from './appointments.mappers.js';
 import { patientRepository } from '../patient/patient.repository.js';
-import { notifyUser } from '../notifications/notifications.service.js';
 import { queueRepository } from '../doctor-queue/queue.repository.js';
 import { calculateEta } from '../queue-engine/eta.service.js';
-import { ConflictError, NotFoundError } from '../../utils/app-error.js';
-import { recordAuditLog } from '../../utils/audit-log.js';
-
-const CANCELLABLE_STATUSES = new Set<AppointmentStatus>([
-  AppointmentStatus.PENDING,
-  AppointmentStatus.CONFIRMED,
-]);
+import { generateAvailableSlots } from '../booking/booking.availability.js';
+import { toAvailabilityResultDto, toBookingConfirmationDto, toSlotHoldDto } from '../booking/booking.mappers.js';
+import { bookingEngine } from '../booking/booking.engine.js';
+import { bookingRepository } from '../booking/booking.repository.js';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../utils/app-error.js';
 
 async function resolvePatientId(userId: string): Promise<string> {
   const patient = await patientRepository.findByUserId(userId);
@@ -51,32 +57,13 @@ export const appointmentsService = {
     if (!appointment) {
       throw new NotFoundError('Appointment');
     }
-    if (!CANCELLABLE_STATUSES.has(appointment.status)) {
-      throw new ConflictError(`An appointment with status ${appointment.status} cannot be cancelled`);
+    const cancelled = await bookingRepository.findAppointmentByIdForActor(appointmentId);
+    if (!cancelled) {
+      throw new NotFoundError('Appointment');
     }
-
-    const cancelled = await appointmentsRepository.cancel(appointmentId, input.reason);
-
-    await notifyUser({
-      userId,
-      type: NotificationType.APPOINTMENT_UPDATE,
-      title: 'Appointment cancelled',
-      message: `Your appointment with ${appointment.doctor.displayName} on ${appointment.scheduledAt.toLocaleDateString(
-        'en-IN',
-      )} has been cancelled.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: appointmentId,
-    });
-
-    recordAuditLog({
-      actorUserId: userId,
-      action: 'appointment.cancelled',
-      entityType: 'Appointment',
-      entityId: appointmentId,
-      metadata: { reason: input.reason },
-    });
-
-    return toAppointmentDetail(cancelled);
+    await bookingEngine.cancelCore(cancelled, { reason: input.reason, actorUserId: userId, source: 'PATIENT' });
+    const detail = await appointmentsRepository.findById(appointmentId, patientId);
+    return toAppointmentDetail(detail!);
   },
 
   /**
@@ -159,5 +146,69 @@ export const appointmentsService = {
       upcoming: upcoming ? toAppointmentSummary(upcoming) : null,
       today: today ? toAppointmentSummary(today) : null,
     };
+  },
+
+  /** Public — no patient context needed; used by the doctor-discovery booking flow. */
+  async getAvailability(query: AvailabilityQuery): Promise<AvailabilityResultDto> {
+    const result = await generateAvailableSlots({
+      doctorId: query.doctorId,
+      clinicId: query.clinicId,
+      date: query.date,
+      consultationType: query.consultationType,
+    });
+    return toAvailabilityResultDto(result, query.date);
+  },
+
+  async holdSlot(userId: string, input: HoldSlotInput): Promise<SlotHoldDto> {
+    const patientId = await resolvePatientId(userId);
+    const hold = await bookingEngine.holdSlot({
+      actorUserId: userId,
+      patientId,
+      bookingSource: 'PATIENT',
+      doctorId: input.doctorId,
+      clinicId: input.clinicId,
+      scheduledAt: new Date(input.scheduledAt),
+      consultationType: input.consultationType,
+    });
+    return toSlotHoldDto(hold);
+  },
+
+  async releaseHold(userId: string, holdId: string): Promise<void> {
+    await bookingEngine.releaseHold(holdId, userId);
+  },
+
+  async create(userId: string, input: CreateAppointmentInput): Promise<BookingConfirmationDto> {
+    const patientId = await resolvePatientId(userId);
+    const appointment = await bookingEngine.book({
+      actorUserId: userId,
+      patientId,
+      bookingSource: 'PATIENT',
+      holdId: input.holdId,
+      doctorId: input.doctorId,
+      clinicId: input.clinicId,
+      scheduledAt: input.scheduledAt ? new Date(input.scheduledAt) : undefined,
+      consultationType: input.consultationType,
+      appointmentType: input.appointmentType,
+      reasonForVisit: input.reasonForVisit,
+    });
+    return toBookingConfirmationDto(appointment);
+  },
+
+  async reschedule(userId: string, appointmentId: string, input: RescheduleAppointmentInput): Promise<AppointmentDetailDto> {
+    const patientId = await resolvePatientId(userId);
+    const owned = await appointmentsRepository.findById(appointmentId, patientId);
+    if (!owned) {
+      throw new NotFoundError('Appointment');
+    }
+    if (owned.patientId !== patientId) {
+      throw new ForbiddenError();
+    }
+    await bookingEngine.reschedule(appointmentId, userId, 'PATIENT', {
+      newScheduledAt: new Date(input.newScheduledAt),
+      holdId: input.holdId,
+      reason: input.reason,
+    });
+    const detail = await appointmentsRepository.findById(appointmentId, patientId);
+    return toAppointmentDetail(detail!);
   },
 };

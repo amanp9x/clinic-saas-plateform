@@ -6,6 +6,7 @@ import { prisma } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
+import { generateBookingReference } from '../booking/booking-reference.util.js';
 
 const BOOKABLE_STATUSES = new Set<AppointmentStatus>([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]);
 
@@ -106,6 +107,8 @@ export const queueEngine = {
         status: AppointmentStatus.CHECKED_IN,
         reasonForVisit: input.reasonForVisit || null,
         paymentStatus: input.paymentStatus,
+        bookingReference: generateBookingReference(scheduledAt),
+        bookingSource: 'RECEPTION',
       },
       include: { patient: true, doctor: true, clinic: true },
     });

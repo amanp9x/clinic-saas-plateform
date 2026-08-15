@@ -29,6 +29,7 @@ import { NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
 import { endOfDay, startOfDay, startOfMonth, startOfWeek } from '../../utils/date.js';
+import { parseTimeString } from '../../utils/time.util.js';
 import { saveUploadedFile, deleteUploadedFile, relativePathFromUrl } from '../../services/storage.service.js';
 
 const PLATFORM_COMMISSION_PERCENT = 10;
@@ -36,11 +37,6 @@ const PLATFORM_COMMISSION_PERCENT = 10;
 function toNullable(value: string | undefined): string | null | undefined {
   if (value === undefined) return undefined;
   return value === '' ? null : value;
-}
-
-function parseTimeString(hhmm: string): Date {
-  const [hour, minute] = hhmm.split(':').map(Number);
-  return new Date(Date.UTC(1970, 0, 1, hour, minute, 0));
 }
 
 export const doctorService = {

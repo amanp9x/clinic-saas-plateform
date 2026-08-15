@@ -29,6 +29,7 @@ import { clinicResourcesRouter } from '../modules/clinic-resources/clinic-resour
 import { clinicStaffRouter } from '../modules/clinic-staff/clinic-staff.routes.js';
 import { clinicAuditRouter } from '../modules/clinic-audit/clinic-audit.routes.js';
 import { clinicReportsRouter } from '../modules/clinic-reports/clinic-reports.routes.js';
+import { blockedSlotsRouter } from '../modules/blocked-slots/blocked-slots.routes.js';
 
 export const apiRouter = Router();
 
@@ -72,4 +73,5 @@ apiRouter.use('/clinic/resources', clinicResourcesRouter);
 apiRouter.use('/clinic/staff', clinicStaffRouter);
 apiRouter.use('/clinic/audit-logs', clinicAuditRouter);
 apiRouter.use('/clinic/reports', clinicReportsRouter);
+apiRouter.use('/clinic/blocked-slots', blockedSlotsRouter);
 apiRouter.use('/clinic', clinicRouter);

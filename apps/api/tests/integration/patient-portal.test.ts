@@ -16,6 +16,7 @@ const { prisma } = await import('../../src/config/database.js');
 const { DEMO_PATIENT_EMAIL, DEMO_PATIENT_PASSWORD } = await import('../../prisma/seed-constants.js');
 const { AppointmentStatus } = await import('@prisma/client');
 const { resetAuthTables } = await import('../helpers/db.js');
+const { generateBookingReference } = await import('../../src/modules/booking/booking-reference.util.js');
 
 const app = createApp();
 
@@ -55,7 +56,7 @@ async function seedAppointmentFor(
   const doctor = await prisma.doctor.findFirstOrThrow({ where: { slug: 'dr-aditi-sharma' } });
   const clinic = await prisma.clinic.findFirstOrThrow({ where: { slug: 'sunrise-family-clinic' } });
   return prisma.appointment.create({
-    data: { patientId, doctorId: doctor.id, clinicId: clinic.id, status, scheduledAt },
+    data: { patientId, doctorId: doctor.id, clinicId: clinic.id, status, scheduledAt, bookingReference: generateBookingReference(scheduledAt) },
   });
 }
 
