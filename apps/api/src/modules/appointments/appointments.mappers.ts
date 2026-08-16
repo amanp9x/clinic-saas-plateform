@@ -22,6 +22,8 @@ export function toAppointmentSummary(appointment: AppointmentWithRelations): App
     reasonForVisit: appointment.reasonForVisit,
     consultationFee: appointment.consultationFee ? appointment.consultationFee.toString() : null,
     hasPrescription: appointment.prescriptions.length > 0,
+    paymentStatus: appointment.payment?.status ?? null,
+    paymentId: appointment.payment?.id ?? null,
   };
 }
 

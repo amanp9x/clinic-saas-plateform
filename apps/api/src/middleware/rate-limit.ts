@@ -50,3 +50,19 @@ export const otpRequestRateLimiter = rateLimit({
     });
   },
 });
+
+/** Sensitive payment endpoints (order creation, verification, refunds) — tighter than the
+ * general API limiter to blunt brute-force verification/signature-guessing attempts. */
+export const paymentSensitiveRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: skipInTest,
+  handler: (_req, res) => {
+    res.status(429).json({
+      success: false,
+      error: { code: ErrorCode.RATE_LIMITED, message: 'Too many payment requests, please try again later' },
+    });
+  },
+});

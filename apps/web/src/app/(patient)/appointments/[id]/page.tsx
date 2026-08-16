@@ -2,16 +2,20 @@
 
 import { use } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CalendarClock, MapPin, Phone, Receipt } from 'lucide-react';
+import { toast } from 'sonner';
+import { ArrowLeft, CalendarClock, CreditCard, MapPin, Phone, Receipt } from 'lucide-react';
 import { useAppointment } from '@/hooks/patient/use-appointments';
+import { downloadReceipt } from '@/hooks/patient/use-payments';
 import { AppointmentStatusBadge } from '@/components/patient/appointment-status-badge';
 import { CancelAppointmentDialog } from '@/components/patient/cancel-appointment-dialog';
 import { RescheduleAppointmentDialog } from '@/components/patient/reschedule-appointment-dialog';
 import { EmptyState } from '@/components/marketing/empty-state';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ApiError } from '@/lib/api-client';
 import { formatDateTime, formatFee, initials } from '@/lib/format';
 
 const CANCELLABLE_STATUSES = new Set(['PENDING', 'CONFIRMED']);
@@ -105,6 +109,64 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
             <div>
               <p className="text-sm font-medium">Reason for visit</p>
               <p className="text-muted-foreground text-sm">{appointment.reasonForVisit}</p>
+            </div>
+          )}
+
+          {appointment.status === 'PENDING' && !appointment.paymentStatus && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="text-muted-foreground size-4 shrink-0" />
+                <p className="text-sm font-medium">Payment required to confirm this appointment</p>
+              </div>
+              <Button size="sm" render={<Link href={`/payment/${appointment.id}`} />}>
+                Pay now
+              </Button>
+            </div>
+          )}
+
+          {appointment.paymentStatus && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="text-muted-foreground size-4 shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {appointment.paymentStatus === 'CAPTURED' && 'Paid'}
+                    {appointment.paymentStatus === 'REFUNDED' && 'Refunded'}
+                    {appointment.paymentStatus === 'PARTIALLY_REFUNDED' && 'Partially refunded'}
+                    {(appointment.paymentStatus === 'CREATED' || appointment.paymentStatus === 'PENDING') && 'Payment pending'}
+                    {appointment.paymentStatus === 'FAILED' && 'Payment failed'}
+                    {appointment.paymentStatus === 'CANCELLED' && 'Payment expired'}
+                    {appointment.paymentStatus === 'AUTHORIZED' && 'Payment processing'}
+                  </p>
+                  {appointment.paymentStatus === 'CAPTURED' && <p className="text-muted-foreground text-xs">Invoice available</p>}
+                </div>
+              </div>
+              {(appointment.paymentStatus === 'CREATED' || appointment.paymentStatus === 'PENDING') && (
+                <Button size="sm" render={<Link href={`/payment/${appointment.id}`} />}>
+                  Pay now
+                </Button>
+              )}
+              {appointment.paymentStatus === 'FAILED' && (
+                <Button size="sm" variant="outline" render={<Link href={`/payment/${appointment.id}`} />}>
+                  Retry
+                </Button>
+              )}
+              {appointment.paymentStatus === 'CAPTURED' && appointment.paymentId && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    downloadReceipt(appointment.paymentId!, `${appointment.bookingReference}-receipt.pdf`).catch((err) =>
+                      toast.error(err instanceof ApiError ? err.message : 'Could not download receipt'),
+                    )
+                  }
+                >
+                  Download receipt
+                </Button>
+              )}
+              {(appointment.paymentStatus === 'REFUNDED' || appointment.paymentStatus === 'PARTIALLY_REFUNDED') && (
+                <Badge variant="outline">{appointment.paymentStatus.replace('_', ' ')}</Badge>
+              )}
             </div>
           )}
 

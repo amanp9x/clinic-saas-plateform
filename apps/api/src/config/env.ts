@@ -31,8 +31,12 @@ const envSchema = z.object({
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
 
+  PAYMENT_PROVIDER: z.enum(['mock', 'razorpay']).optional(),
+  PAYMENT_ORDER_EXPIRY_MINUTES: z.coerce.number().int().positive().default(15),
   RAZORPAY_KEY_ID: z.string().optional(),
   RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  MOCK_PAYMENT_SECRET: z.string().default('mock-payment-secret-dev-only'),
 
   STORAGE_PROVIDER: z.string().default('s3'),
   STORAGE_BUCKET: z.string().optional(),

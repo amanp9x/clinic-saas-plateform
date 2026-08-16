@@ -19,6 +19,7 @@ export function toReceptionAppointmentSummary(a: ReceptionAppointmentWithRelatio
     tokenStatus: a.queueToken?.status ?? null,
     queuePosition,
     priority: a.queueToken?.priority ?? null,
+    paymentStatus: a.payment?.status ?? null,
   };
 }
 

@@ -68,6 +68,60 @@ export const SlotStatus = {
 } as const;
 export type SlotStatus = (typeof SlotStatus)[keyof typeof SlotStatus];
 
+// ---------------------------------------------------------------------------
+// Payments & Billing Engine (Phase 9)
+// ---------------------------------------------------------------------------
+
+export const PaymentProvider = {
+  MOCK: 'MOCK',
+  RAZORPAY: 'RAZORPAY',
+  STRIPE: 'STRIPE',
+} as const;
+export type PaymentProvider = (typeof PaymentProvider)[keyof typeof PaymentProvider];
+
+/** Payment (order-level) transaction lifecycle — deliberately a separate enum from the existing
+ * `PaymentStatus` (PENDING/PAID/WAIVED) walk-in intake flag on Appointment, which predates this
+ * engine and remains reception's simple "did the desk collect cash" toggle. */
+export const PaymentTransactionStatus = {
+  CREATED: 'CREATED',
+  PENDING: 'PENDING',
+  AUTHORIZED: 'AUTHORIZED',
+  CAPTURED: 'CAPTURED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  REFUND_PENDING: 'REFUND_PENDING',
+  REFUNDED: 'REFUNDED',
+  PARTIALLY_REFUNDED: 'PARTIALLY_REFUNDED',
+} as const;
+export type PaymentTransactionStatus = (typeof PaymentTransactionStatus)[keyof typeof PaymentTransactionStatus];
+
+export const PaymentAttemptStatus = {
+  CREATED: 'CREATED',
+  PENDING: 'PENDING',
+  AUTHORIZED: 'AUTHORIZED',
+  CAPTURED: 'CAPTURED',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type PaymentAttemptStatus = (typeof PaymentAttemptStatus)[keyof typeof PaymentAttemptStatus];
+
+export const PaymentMethod = {
+  UPI: 'UPI',
+  CARD: 'CARD',
+  NETBANKING: 'NETBANKING',
+  WALLET: 'WALLET',
+  OTHER: 'OTHER',
+} as const;
+export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
+
+export const RefundStatus = {
+  REFUND_PENDING: 'REFUND_PENDING',
+  REFUNDED: 'REFUNDED',
+  PARTIALLY_REFUNDED: 'PARTIALLY_REFUNDED',
+  FAILED: 'FAILED',
+} as const;
+export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus];
+
 /** Doctor's manually-set availability/session status for a clinic session. Staff-controlled, never inferred. */
 export const DoctorSessionStatus = {
   NOT_ARRIVED: 'NOT_ARRIVED',

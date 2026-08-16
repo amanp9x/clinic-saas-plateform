@@ -34,6 +34,7 @@ export function AppointmentTable({ appointments }: { appointments: ReceptionAppo
           <TableHead>Doctor</TableHead>
           <TableHead>Scheduled</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead>Payment</TableHead>
           <TableHead>Token / Queue</TableHead>
           <TableHead className="text-right">Action</TableHead>
         </TableRow>
@@ -51,6 +52,15 @@ export function AppointmentTable({ appointments }: { appointments: ReceptionAppo
             <TableCell>{formatDateTime(a.scheduledAt)}</TableCell>
             <TableCell>
               <Badge variant="outline">{a.status.replace('_', ' ')}</Badge>
+            </TableCell>
+            <TableCell>
+              {a.paymentStatus ? (
+                <Badge variant={a.paymentStatus === 'CAPTURED' ? 'secondary' : a.paymentStatus === 'FAILED' ? 'destructive' : 'outline'}>
+                  {a.paymentStatus.replace('_', ' ')}
+                </Badge>
+              ) : (
+                <span className="text-muted-foreground text-xs">—</span>
+              )}
             </TableCell>
             <TableCell>
               {a.tokenNumber ? (

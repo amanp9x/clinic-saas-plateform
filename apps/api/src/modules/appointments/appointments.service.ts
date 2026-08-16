@@ -19,6 +19,7 @@ import { generateAvailableSlots } from '../booking/booking.availability.js';
 import { toAvailabilityResultDto, toBookingConfirmationDto, toSlotHoldDto } from '../booking/booking.mappers.js';
 import { bookingEngine } from '../booking/booking.engine.js';
 import { bookingRepository } from '../booking/booking.repository.js';
+import { paymentEngine } from '../payments/payment.engine.js';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../utils/app-error.js';
 
 async function resolvePatientId(userId: string): Promise<string> {
@@ -62,6 +63,7 @@ export const appointmentsService = {
       throw new NotFoundError('Appointment');
     }
     await bookingEngine.cancelCore(cancelled, { reason: input.reason, actorUserId: userId, source: 'PATIENT' });
+    await paymentEngine.handleAppointmentCancelled(appointmentId, userId);
     const detail = await appointmentsRepository.findById(appointmentId, patientId);
     return toAppointmentDetail(detail!);
   },

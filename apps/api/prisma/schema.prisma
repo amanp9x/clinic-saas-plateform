@@ -168,11 +168,63 @@ enum TokenPriority {
   EMERGENCY
 }
 
-/// Walk-in intake flag only — no payment processing. Payment Engine is explicitly out of scope.
+/// Walk-in intake flag only, set by reception at registration — a simple 3-state "did the desk
+/// collect payment" toggle. Left completely untouched by the Phase 9 Payment Engine below: it is
+/// not a rich provider-integrated transaction lifecycle (no AUTHORIZED/CAPTURED/REFUND states),
+/// so it is not "equivalent" and is not reused/renamed for that purpose.
 enum PaymentStatus {
   PENDING
   PAID
   WAIVED
+}
+
+// ---------------------------------------------------------------------------
+// Payments & Billing Engine (Phase 9)
+// ---------------------------------------------------------------------------
+
+enum PaymentProvider {
+  MOCK
+  RAZORPAY
+  STRIPE
+}
+
+/// Payment (order-level) transaction lifecycle — the source of truth for whether an appointment
+/// is paid. See PAYMENT_STATE_MACHINE in payment-state-machine.ts for the enforced transition graph.
+enum PaymentTransactionStatus {
+  CREATED
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELLED
+  REFUND_PENDING
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+/// One row per provider order/checkout attempt — a Payment can have several across retries.
+enum PaymentAttemptStatus {
+  CREATED
+  PENDING
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NETBANKING
+  WALLET
+  OTHER
+}
+
+enum RefundStatus {
+  REFUND_PENDING
+  REFUNDED
+  PARTIALLY_REFUNDED
+  FAILED
 }
 
 // ---------------------------------------------------------------------------
@@ -436,6 +488,8 @@ model Clinic {
   favorites        Favorite[]
   slotHolds        SlotHold[]
   blockedSlots     BlockedSlot[]
+  payments         Payment[]
+  invoices         Invoice[]
 
   @@index([slug])
   @@index([city])
@@ -524,6 +578,8 @@ model Doctor {
   favorites      Favorite[]
   slotHolds      SlotHold[]
   blockedSlots   BlockedSlot[]
+  payments       Payment[]
+  invoices       Invoice[]
 
   @@index([slug])
   @@index([specializationId])
@@ -597,8 +653,8 @@ model Favorite {
   createdAt DateTime @default(now())
 
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor  Doctor?  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  clinic  Clinic?  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  doctor  Doctor? @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic  Clinic? @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@unique([patientId, doctorId])
   @@unique([patientId, clinicId])
@@ -867,6 +923,8 @@ model Patient {
   consultations  Consultation[]
   favorites      Favorite[]
   slotHolds      SlotHold[]
+  payments       Payment[]
+  invoices       Invoice[]
 
   @@map("patients")
 }
@@ -921,12 +979,12 @@ model Appointment {
   completedAt     DateTime?
 
   /// Human-friendly, publicly-safe reference (e.g. "APT-20260815-8F4K2") — never the row id.
-  bookingReference String @unique
+  bookingReference   String           @unique
   /// Always server-derived from the authenticated actor's role — never accepted from the client.
-  bookingSource    BookingSource    @default(PATIENT)
-  appointmentType  AppointmentType  @default(NEW_CONSULTATION)
+  bookingSource      BookingSource    @default(PATIENT)
+  appointmentType    AppointmentType  @default(NEW_CONSULTATION)
   /// Modality only (IN_CLINIC/ONLINE) — booking input validation rejects FOLLOW_UP/EMERGENCY here.
-  consultationType ConsultationType @default(IN_CLINIC)
+  consultationType   ConsultationType @default(IN_CLINIC)
   /// Snapshotted at booking/reschedule time — later ClinicSettings/ClinicDoctor config changes
   /// must never retroactively change historical appointments.
   durationMinutes    Int?
@@ -941,8 +999,8 @@ model Appointment {
 
   // --- Cancellation metadata (extends cancelReason/cancelledAt above) ---
   cancelledByUserId          String?
-  cancelSource                BookingSource?
-  previousStatusBeforeCancel  AppointmentStatus?
+  cancelSource               BookingSource?
+  previousStatusBeforeCancel AppointmentStatus?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -954,6 +1012,8 @@ model Appointment {
   labReports    LabReport[]
   queueToken    QueueToken?
   consultation  Consultation?
+  payment       Payment?
+  invoice       Invoice?
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -1019,6 +1079,190 @@ model BlockedSlot {
   @@index([clinicId, startAt])
   @@index([doctorId, startAt])
   @@map("blocked_slots")
+}
+
+// ---------------------------------------------------------------------------
+// Payments & Billing Engine (Phase 9)
+// ---------------------------------------------------------------------------
+
+/// The logical, one-per-appointment payment obligation. `status` is the aggregate/source-of-truth
+/// state (see PAYMENT_STATE_MACHINE) — individual provider order/checkout attempts live in
+/// `PaymentAttempt` underneath so a failed attempt can be retried without creating a second
+/// logical payment or a second appointment. `subtotal`/`discount`/`tax`/`amount` are a server-computed
+/// snapshot taken at creation time (see pricing.service.ts) — later ClinicSettings/fee changes must
+/// never retroactively change a historical payment, exactly like Appointment's own fee snapshot.
+model Payment {
+  id            String @id @default(uuid())
+  appointmentId String @unique
+  patientId     String
+  doctorId      String
+  clinicId      String
+
+  provider PaymentProvider
+  status   PaymentTransactionStatus @default(CREATED)
+
+  subtotal Decimal @db.Decimal(10, 2)
+  discount Decimal @default(0) @db.Decimal(10, 2)
+  tax      Decimal @default(0) @db.Decimal(10, 2)
+  amount   Decimal @db.Decimal(10, 2)
+  currency String
+
+  method            PaymentMethod?
+  /// Denormalized pointers to the active/latest attempt for fast lookup by provider callbacks —
+  /// PaymentAttempt rows underneath remain the durable per-attempt record.
+  providerOrderId   String?
+  providerPaymentId String?
+  capturedAmount    Decimal?       @db.Decimal(10, 2)
+  refundedAmount    Decimal        @default(0) @db.Decimal(10, 2)
+
+  /// Payment order expiry — lazily enforced (no cron/job infra in this codebase, matching
+  /// SlotHold's own documented lazy-expiry convention). Checked whenever a payment is read
+  /// (GET /payments/:id[/status]) or when a new booking collides with a stale PENDING appointment.
+  expiresAt   DateTime
+  capturedAt  DateTime?
+  cancelledAt DateTime?
+  metadata    Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  appointment   Appointment           @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient       Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        Doctor                @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic        Clinic                @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  attempts      PaymentAttempt[]
+  webhookEvents PaymentWebhookEvent[]
+  invoice       Invoice?
+  refunds       Refund[]
+
+  @@index([patientId])
+  @@index([clinicId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([providerOrderId])
+  @@index([providerPaymentId])
+  @@map("payments")
+}
+
+/// One row per provider order/checkout attempt. A retry after FAILED creates a new attempt
+/// (attemptNumber incremented) rather than a new Payment — "one logical payment/appointment
+/// relationship" per the Phase 9 spec.
+model PaymentAttempt {
+  id                String               @id @default(uuid())
+  paymentId         String
+  attemptNumber     Int
+  provider          PaymentProvider
+  providerOrderId   String
+  providerPaymentId String?
+  amount            Decimal              @db.Decimal(10, 2)
+  currency          String
+  status            PaymentAttemptStatus @default(CREATED)
+  method            PaymentMethod?
+  /// Safe-for-patients failure text only — never a raw provider error body or stack trace.
+  failureCode       String?
+  failureMessage    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerOrderId])
+  @@index([paymentId])
+  @@index([providerPaymentId])
+  @@map("payment_attempts")
+}
+
+/// Idempotency ledger for provider webhook delivery — the unique constraint on
+/// (provider, providerEventId) is what makes "the same webhook received twice" a no-op at the
+/// database level, not just an application-level check (defense against a genuine race between
+/// two concurrent deliveries of the same event).
+model PaymentWebhookEvent {
+  id              String          @id @default(uuid())
+  provider        PaymentProvider
+  providerEventId String
+  eventType       String
+  paymentId       String?
+  payload         Json
+  processedAt     DateTime?
+
+  createdAt DateTime @default(now())
+
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId])
+  @@index([paymentId])
+  @@map("payment_webhook_events")
+}
+
+/// Generated once a Payment reaches CAPTURED — see invoice-number.util.ts for the concurrency-safe
+/// sequence generator behind `invoiceNumber`. Financial fields are copied from Payment at issue
+/// time (a second, independent snapshot) so a later Payment mutation (e.g. a subsequent refund)
+/// cannot retroactively alter an already-issued invoice's figures.
+model Invoice {
+  id            String @id @default(uuid())
+  invoiceNumber String @unique
+  paymentId     String @unique
+  appointmentId String @unique
+  patientId     String
+  doctorId      String
+  clinicId      String
+
+  subtotal Decimal @db.Decimal(10, 2)
+  discount Decimal @default(0) @db.Decimal(10, 2)
+  tax      Decimal @default(0) @db.Decimal(10, 2)
+  total    Decimal @db.Decimal(10, 2)
+  currency String
+
+  status PaymentTransactionStatus
+  method PaymentMethod?
+
+  issuedAt DateTime @default(now())
+
+  payment     Payment     @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor      @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic      Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([clinicId])
+  @@index([appointmentId])
+  @@map("invoices")
+}
+
+/// Per-year atomic counter backing invoice-number.util.ts's `INV-<year>-<seq>` generator — a
+/// single-statement `INSERT ... ON CONFLICT DO UPDATE ... RETURNING` against this table is what
+/// makes the sequence safe under concurrency (see the "duplicate invoice numbers under
+/// concurrency" test requirement), without needing a Postgres SEQUENCE object per year.
+model InvoiceSequence {
+  year       Int @id
+  lastNumber Int @default(0)
+
+  @@map("invoice_sequences")
+}
+
+/// Authorized clinic-side refund request against a captured Payment. `status` is the refund's own
+/// lifecycle; a successful/failed refund also drives the parent Payment's status via
+/// payment-state-machine.ts (never updated ad hoc).
+model Refund {
+  id               String       @id @default(uuid())
+  paymentId        String
+  amount           Decimal      @db.Decimal(10, 2)
+  reason           String
+  actorUserId      String
+  status           RefundStatus @default(REFUND_PENDING)
+  providerRefundId String?
+  failureMessage   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+  @@index([status])
+  @@map("refunds")
 }
 
 model Prescription {
@@ -1407,6 +1651,17 @@ model ClinicSettings {
   bufferMinutes                      Int     @default(0)
   cancellationPolicy                 String?
   noShowPolicy                       String?
+
+  /// Payments & Billing (Phase 9) — opt-in per clinic, defaults preserve every existing clinic's
+  /// current behavior exactly (online payment not required, appointments confirm immediately as
+  /// they did before this phase; see booking.engine.ts's `book()`).
+  onlinePaymentRequired       Boolean  @default(false)
+  taxPercent                  Decimal? @db.Decimal(5, 2)
+  serviceFeeFlat              Decimal? @db.Decimal(10, 2)
+  /// Refund eligibility percentage (0–100) used by refund-eligibility.service.ts's centralized
+  /// rule — kept a simple flat percentage rather than parsing the free-text `cancellationPolicy`
+  /// above, which is display copy, not a machine-readable policy.
+  refundOnCancellationPercent Int      @default(100)
 
   /// Queue — consumed by the existing queue engine (modules/queue-engine), which remains the
   /// source of truth for queue *behavior*; these are inputs to it, not a parallel implementation.

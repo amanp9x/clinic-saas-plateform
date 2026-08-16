@@ -8,6 +8,10 @@ declare global {
         role: UserRole;
         sessionId: string;
       };
+      /** Raw request bytes, captured by express.json()'s `verify` hook in app.ts — needed for
+       * payment-webhook signature verification, which must hash the exact bytes the provider
+       * signed, not a re-serialized JSON.stringify() of the parsed body. */
+      rawBody?: Buffer;
     }
   }
 }

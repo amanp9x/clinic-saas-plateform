@@ -1,4 +1,4 @@
-import type { AppointmentStatus, AppointmentType, ConsultationType, Gender } from '../enums.js';
+import type { AppointmentStatus, AppointmentType, ConsultationType, Gender, PaymentTransactionStatus } from '../enums.js';
 
 export interface PatientAddressDto {
   id: string;
@@ -50,6 +50,10 @@ export interface AppointmentSummaryDto {
   reasonForVisit: string | null;
   consultationFee: string | null;
   hasPrescription: boolean;
+  /** Phase 9 — null when this appointment has no online Payment record (free consultation, or a
+   * clinic that doesn't require online payment; see ClinicSettings.onlinePaymentRequired). */
+  paymentStatus: PaymentTransactionStatus | null;
+  paymentId: string | null;
 }
 
 export interface AppointmentDetailDto extends AppointmentSummaryDto {

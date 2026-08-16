@@ -24,6 +24,7 @@ import { toBookingConfirmationDto } from '../booking/booking.mappers.js';
 import { queueEngine } from '../queue-engine/queue-engine.service.js';
 import { doctorAppointmentsRepository } from '../doctor-appointments/doctor-appointments.repository.js';
 import { doctorAppointmentsEngine } from '../doctor-appointments/doctor-appointments.service.js';
+import { paymentEngine } from '../payments/payment.engine.js';
 
 async function queuePositionFor(token: { id: string; status: TokenStatus; doctorSessionId: string; priority: TokenPriority; tokenNumber: number } | null | undefined) {
   if (!token) return null;
@@ -148,6 +149,7 @@ export const receptionAppointmentsService = {
       throw new NotFoundError('Appointment');
     }
     const cancelled = await bookingEngine.cancelCore(existing, { reason: input.reason, actorUserId: userId, source: 'RECEPTION' });
+    await paymentEngine.handleAppointmentCancelled(appointmentId, userId);
     return toReceptionAppointmentDetail(
       { ...cancelled, queueToken: null },
       null,

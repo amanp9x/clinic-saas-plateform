@@ -8,6 +8,7 @@ const detailInclude = {
   clinic: true,
   prescriptions: { select: { id: true } },
   consultation: { select: { status: true } },
+  payment: { select: { id: true, status: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export type DoctorAppointmentWithRelations = Prisma.AppointmentGetPayload<{ include: typeof detailInclude }>;

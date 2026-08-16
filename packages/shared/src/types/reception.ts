@@ -1,4 +1,4 @@
-import type { AppointmentStatus, DoctorSessionStatus, Gender, QueueStatus, TokenPriority, TokenStatus, TokenType, UserRole } from '../enums.js';
+import type { AppointmentStatus, DoctorSessionStatus, Gender, PaymentTransactionStatus, QueueStatus, TokenPriority, TokenStatus, TokenType, UserRole } from '../enums.js';
 import type { DoctorSessionDto, QueueTokenDto } from './doctor.js';
 
 export interface ReceptionDoctorQueueStatusDto {
@@ -42,6 +42,10 @@ export interface ReceptionAppointmentSummaryDto {
   tokenStatus: TokenStatus | null;
   queuePosition: number | null;
   priority: TokenPriority | null;
+  /** Phase 9 — null when the appointment has no online Payment record at all (e.g. free
+   * consultation, or a clinic that doesn't require online payment). Reception sees status only,
+   * never provider secrets or card/UPI details. */
+  paymentStatus: PaymentTransactionStatus | null;
 }
 
 export interface ReceptionAppointmentDetailDto extends ReceptionAppointmentSummaryDto {

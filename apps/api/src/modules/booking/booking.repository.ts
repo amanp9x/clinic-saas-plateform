@@ -172,6 +172,7 @@ export const bookingRepository = {
         doctor: { include: { specialization: true } },
         clinic: true,
         prescriptions: { select: { id: true } },
+        payment: { select: { id: true, status: true } },
       },
     });
   },

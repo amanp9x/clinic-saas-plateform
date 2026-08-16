@@ -7,6 +7,7 @@ const appointmentInclude = {
   patient: { include: { user: true } },
   doctor: true,
   queueToken: true,
+  payment: { select: { id: true, status: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export type ReceptionAppointmentWithRelations = Prisma.AppointmentGetPayload<{ include: typeof appointmentInclude }>;
@@ -73,7 +74,7 @@ export const receptionAppointmentsRepository = {
         user: true,
         appointments: {
           where: { clinicId, scheduledAt: { gte: startOfDay(), lte: endOfDay() } },
-          include: { doctor: true, queueToken: true },
+          include: { doctor: true, queueToken: true, payment: { select: { id: true, status: true } } },
           orderBy: { scheduledAt: 'desc' },
           take: 1,
         },

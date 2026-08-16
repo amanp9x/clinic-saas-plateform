@@ -18,6 +18,7 @@ export const doctorPatientsRepository = {
         doctor: { include: { specialization: true } },
         clinic: true,
         prescriptions: { select: { id: true } },
+        payment: { select: { id: true, status: true } },
       },
       orderBy: { scheduledAt: 'desc' },
     });

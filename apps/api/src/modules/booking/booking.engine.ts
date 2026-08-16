@@ -21,6 +21,7 @@ const appointmentDetailInclude = {
   clinic: true,
   patient: { include: { user: true } },
   prescriptions: { select: { id: true } },
+  payment: { select: { id: true, status: true } },
 } satisfies Prisma.AppointmentInclude;
 
 export type BookingAppointment = Prisma.AppointmentGetPayload<{ include: typeof appointmentDetailInclude }>;
@@ -32,7 +33,7 @@ function toLocalDateString(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-async function resolveFeeForDoctorClinic(doctorId: string, clinicId: string): Promise<number | null> {
+export async function resolveFeeForDoctorClinic(doctorId: string, clinicId: string): Promise<number | null> {
   const clinicDoctor = await requireDoctorAtClinic(doctorId, clinicId);
   const value = clinicDoctor.consultationFeeOverride ?? clinicDoctor.doctor.consultationFee;
   return value ? Number(value) : null;
@@ -222,6 +223,20 @@ export const bookingEngine = {
     }
 
     const bookingReference = generateBookingReference(scheduledAt);
+
+    // Phase 9 — online-payment gating is opt-in per clinic (ClinicSettings.onlinePaymentRequired,
+    // default false, so every existing clinic's behavior is unchanged) and only ever applies to
+    // patient self-service bookings with a non-zero fee. Reception/doctor-sourced bookings always
+    // confirm immediately, exactly as before this phase — reception typically collects payment at
+    // the desk, outside this online flow.
+    let initialStatus: AppointmentStatus = AppointmentStatus.CONFIRMED;
+    if (params.bookingSource === 'PATIENT' && feeRupees && feeRupees > 0) {
+      const settings = await bookingRepository.findClinicSettings(clinicId);
+      if (settings?.onlinePaymentRequired) {
+        initialStatus = AppointmentStatus.PENDING;
+      }
+    }
+
     let appointment: BookingAppointment;
     try {
       appointment = await prisma.appointment.create({
@@ -230,7 +245,7 @@ export const bookingEngine = {
           doctorId,
           clinicId,
           scheduledAt,
-          status: AppointmentStatus.CONFIRMED,
+          status: initialStatus,
           consultationType,
           appointmentType: params.appointmentType,
           reasonForVisit: params.reasonForVisit ?? null,
@@ -260,21 +275,66 @@ export const bookingEngine = {
       entityType: 'Appointment',
       entityId: appointment.id,
       clinicId,
-      metadata: { doctorId, patientId: params.patientId, scheduledAt: scheduledAt.toISOString(), bookingSource: params.bookingSource },
+      metadata: { doctorId, patientId: params.patientId, scheduledAt: scheduledAt.toISOString(), bookingSource: params.bookingSource, status: initialStatus },
     });
-    await notifyUser({
-      userId: appointment.patient.user.id,
-      type: NotificationType.APPOINTMENT_UPDATE,
-      title: 'Appointment confirmed',
-      message: `Your appointment with ${appointment.doctor.displayName} on ${scheduledAt.toLocaleString('en-IN')} is confirmed. Reference: ${bookingReference}.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: appointment.id,
-    });
+    if (initialStatus === AppointmentStatus.CONFIRMED) {
+      await notifyUser({
+        userId: appointment.patient.user.id,
+        type: NotificationType.APPOINTMENT_UPDATE,
+        title: 'Appointment confirmed',
+        message: `Your appointment with ${appointment.doctor.displayName} on ${scheduledAt.toLocaleString('en-IN')} is confirmed. Reference: ${bookingReference}.`,
+        relatedEntityType: 'Appointment',
+        relatedEntityId: appointment.id,
+      });
+    } else {
+      // Payment module sends its own "payment initiated"/"payment successful" notifications —
+      // this one just tells the patient the slot is held pending payment, no double-messaging.
+      await notifyUser({
+        userId: appointment.patient.user.id,
+        type: NotificationType.APPOINTMENT_UPDATE,
+        title: 'Appointment reserved — payment required',
+        message: `Your appointment with ${appointment.doctor.displayName} on ${scheduledAt.toLocaleString('en-IN')} is reserved. Complete payment to confirm it. Reference: ${bookingReference}.`,
+        relatedEntityType: 'Appointment',
+        relatedEntityId: appointment.id,
+      });
+    }
     emitToClinicRoom(clinicId, SOCKET_EVENTS.APPOINTMENT.CREATED, { appointmentId: appointment.id, clinicId, doctorId, scheduledAt: scheduledAt.toISOString() });
     emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.CREATED, { appointmentId: appointment.id });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.SLOT.RELEASED, { doctorId, clinicId, scheduledAt: scheduledAt.toISOString() });
 
     return appointment;
+  },
+
+  /** Called only by the payment engine after a payment is verified/captured — the one place a
+   * PENDING (awaiting-payment) appointment transitions to CONFIRMED. Kept in booking.engine.ts
+   * (not duplicated in the payment module) since appointment-lifecycle transitions belong to one
+   * owner; the payment module imports and calls this rather than writing to Appointment directly. */
+  async confirmAfterPayment(appointmentId: string): Promise<BookingAppointment> {
+    const appointment = await bookingRepository.findAppointmentByIdForActor(appointmentId);
+    if (!appointment) {
+      throw new NotFoundError('Appointment');
+    }
+    if (appointment.status !== AppointmentStatus.PENDING) {
+      // Idempotent no-op — a duplicate webhook/verify call for an already-confirmed appointment
+      // must not error or re-confirm.
+      return appointment;
+    }
+    const updated = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: AppointmentStatus.CONFIRMED },
+      include: appointmentDetailInclude,
+    });
+    recordAuditLog({
+      actorUserId: appointment.patient.user.id,
+      action: 'appointment.payment_confirmed',
+      entityType: 'Appointment',
+      entityId: appointmentId,
+      clinicId: appointment.clinicId,
+      metadata: { previousStatus: 'PENDING', newStatus: 'CONFIRMED' },
+    });
+    emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId, clinicId: appointment.clinicId, status: 'CONFIRMED' });
+    emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId, status: 'CONFIRMED' });
+    return updated;
   },
 
   async reschedule(

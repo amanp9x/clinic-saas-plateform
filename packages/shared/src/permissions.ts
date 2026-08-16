@@ -38,6 +38,15 @@ export const CLINIC_PERMISSIONS = {
   HOLIDAY_MANAGE: 'holiday.manage',
   RESOURCE_VIEW: 'resource.view',
   RESOURCE_MANAGE: 'resource.manage',
+
+  // Phase 9 — Payments & Billing. `payment.create`/`payment.verify` are intentionally absent here:
+  // those are patient-owned actions gated by authentication + ownership (same idiom as booking),
+  // not clinic-staff permissions. `invoice.view`/`invoice.download` are folded into BILLING_VIEW
+  // rather than fragmented further — this codebase's convention is one permission per screen/action
+  // group, not one per button.
+  PAYMENT_VIEW: 'payment.view',
+  PAYMENT_REFUND: 'payment.refund',
+  BILLING_VIEW: 'billing.view',
 } as const;
 
 export type ClinicPermission = (typeof CLINIC_PERMISSIONS)[keyof typeof CLINIC_PERMISSIONS];

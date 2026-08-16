@@ -18,6 +18,7 @@ import {
   FileText,
   History,
   BarChart3,
+  CreditCard,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ export const CLINIC_NAV_LINKS = [
   { href: '/clinic/documents', label: 'Documents', icon: FileText },
   { href: '/clinic/audit-logs', label: 'Audit Logs', icon: History },
   { href: '/clinic/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/clinic/billing', label: 'Billing', icon: CreditCard },
 ];
 
 export function ClinicNavLinks({ onNavigate }: { onNavigate?: () => void }) {

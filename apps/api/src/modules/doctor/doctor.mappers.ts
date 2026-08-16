@@ -8,6 +8,7 @@ import type {
   DoctorReview,
   DoctorSession,
   Patient,
+  PaymentTransactionStatus,
   Prescription,
   Specialization,
   User,
@@ -105,7 +106,12 @@ export function toLeaveDto(leave: DoctorLeave & { clinic: Clinic | null }): Doct
 }
 
 export function toDoctorAppointmentSummary(
-  appointment: Appointment & { patient: Patient; clinic: Clinic; prescriptions: Pick<Prescription, 'id'>[] },
+  appointment: Appointment & {
+    patient: Patient;
+    clinic: Clinic;
+    prescriptions: Pick<Prescription, 'id'>[];
+    payment?: { status: PaymentTransactionStatus } | null;
+  },
 ): DoctorAppointmentSummaryDto {
   return {
     id: appointment.id,
@@ -122,6 +128,7 @@ export function toDoctorAppointmentSummary(
     status: appointment.status,
     consultationFee: appointment.consultationFee ? appointment.consultationFee.toString() : null,
     hasPrescription: appointment.prescriptions.length > 0,
+    paymentStatus: appointment.payment?.status ?? null,
   };
 }
 

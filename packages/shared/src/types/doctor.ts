@@ -5,6 +5,7 @@ import type {
   FoodTiming,
   Gender,
   LeaveType,
+  PaymentTransactionStatus,
   PrescriptionStatus,
   QueueStatus,
   TokenPriority,
@@ -36,6 +37,8 @@ export interface DoctorAppointmentSummaryDto {
   status: AppointmentStatus;
   consultationFee: string | null;
   hasPrescription: boolean;
+  /** Phase 9 — limited financial visibility: status only, never provider/payment-method detail. */
+  paymentStatus: PaymentTransactionStatus | null;
 }
 
 export interface DoctorAppointmentDetailDto extends DoctorAppointmentSummaryDto {

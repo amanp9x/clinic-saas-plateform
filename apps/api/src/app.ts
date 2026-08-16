@@ -20,7 +20,16 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
   app.use(compression());
-  app.use(express.json({ limit: '1mb' }));
+  // `verify` stashes the exact raw bytes on the request — payment webhook signature verification
+  // must hash what the provider actually signed, not a re-serialization of the parsed body.
+  app.use(
+    express.json({
+      limit: '1mb',
+      verify: (req, _res, buf) => {
+        (req as import('express').Request).rawBody = buf;
+      },
+    }),
+  );
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
   app.use(cookieParser(env.COOKIE_SECRET));
   app.use(requestLogger);

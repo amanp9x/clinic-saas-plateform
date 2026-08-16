@@ -51,6 +51,12 @@ export const SOCKET_EVENTS = {
     RELEASED: 'slot.released',
     UPDATED: 'slot.updated',
   },
+  PAYMENT: {
+    CREATED: 'payment.created',
+    CAPTURED: 'payment.captured',
+    FAILED: 'payment.failed',
+    REFUNDED: 'payment.refunded',
+  },
   NOTIFICATION: {
     CREATED: 'notification.created',
   },

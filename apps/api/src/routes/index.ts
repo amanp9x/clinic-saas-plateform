@@ -30,6 +30,9 @@ import { clinicStaffRouter } from '../modules/clinic-staff/clinic-staff.routes.j
 import { clinicAuditRouter } from '../modules/clinic-audit/clinic-audit.routes.js';
 import { clinicReportsRouter } from '../modules/clinic-reports/clinic-reports.routes.js';
 import { blockedSlotsRouter } from '../modules/blocked-slots/blocked-slots.routes.js';
+import { paymentsRouter } from '../modules/payments/payment.routes.js';
+import { paymentWebhooksRouter } from '../modules/payments/webhook.routes.js';
+import { clinicBillingRouter } from '../modules/clinic-billing/clinic-billing.routes.js';
 
 export const apiRouter = Router();
 
@@ -43,6 +46,12 @@ apiRouter.use('/appointments', appointmentsRouter);
 apiRouter.use('/medical-records', medicalRecordsRouter);
 apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/dashboard', dashboardRouter);
+
+// --- Payments & Billing (Phase 9) --------------------------------------------
+// The webhook router (unauthenticated, signature-verified) must be registered before the
+// authenticated `/payments` router — same prefix-ordering reason as the `/clinic/*` block below.
+apiRouter.use('/payments/webhooks', paymentWebhooksRouter);
+apiRouter.use('/payments', paymentsRouter);
 
 // --- Doctor Portal (Phase 4) -------------------------------------------------
 apiRouter.use('/doctor', doctorRouter);
@@ -74,4 +83,5 @@ apiRouter.use('/clinic/staff', clinicStaffRouter);
 apiRouter.use('/clinic/audit-logs', clinicAuditRouter);
 apiRouter.use('/clinic/reports', clinicReportsRouter);
 apiRouter.use('/clinic/blocked-slots', blockedSlotsRouter);
+apiRouter.use('/clinic/billing', clinicBillingRouter);
 apiRouter.use('/clinic', clinicRouter);
