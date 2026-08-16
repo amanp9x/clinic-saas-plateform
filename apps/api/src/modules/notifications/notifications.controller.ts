@@ -24,6 +24,11 @@ export const notificationsController = {
     sendSuccess(res, null, { message: 'All notifications marked as read' });
   }),
 
+  remove: asyncHandler(async (req: Request, res: Response) => {
+    await notificationsService.delete(req.user!.id, req.params.id!);
+    sendSuccess(res, null, { message: 'Notification deleted' });
+  }),
+
   getPreferences: asyncHandler(async (req: Request, res: Response) => {
     const preferences = await notificationsService.getPreference(req.user!.id);
     sendSuccess(res, { preferences });

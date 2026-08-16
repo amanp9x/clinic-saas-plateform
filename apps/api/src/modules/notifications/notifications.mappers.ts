@@ -10,24 +10,37 @@ export function toNotificationDto(notification: Notification): NotificationDto {
     isRead: notification.isRead,
     relatedEntityType: notification.relatedEntityType,
     relatedEntityId: notification.relatedEntityId,
+    actionUrl: notification.actionUrl,
+    priority: notification.priority,
+    expiresAt: notification.expiresAt ? notification.expiresAt.toISOString() : null,
     createdAt: notification.createdAt.toISOString(),
   };
 }
 
 export function toPreferenceDto(pref: NotificationPreference): NotificationPreferenceDto {
   return {
-    appointmentUpdates: pref.appointmentUpdates,
-    queueUpdates: pref.queueUpdates,
-    prescriptionReady: pref.prescriptionReady,
-    reportReady: pref.reportReady,
-    channel: pref.channel,
+    appointmentEmail: pref.appointmentEmail,
+    appointmentInApp: pref.appointmentInApp,
+    paymentEmail: pref.paymentEmail,
+    paymentInApp: pref.paymentInApp,
+    queueEmail: pref.queueEmail,
+    queueInApp: pref.queueInApp,
+    prescriptionEmail: pref.prescriptionEmail,
+    prescriptionInApp: pref.prescriptionInApp,
+    announcementEmail: pref.announcementEmail,
+    announcementInApp: pref.announcementInApp,
   };
 }
 
 export const DEFAULT_PREFERENCE_DTO: NotificationPreferenceDto = {
-  appointmentUpdates: true,
-  queueUpdates: true,
-  prescriptionReady: true,
-  reportReady: true,
-  channel: 'EMAIL',
+  appointmentEmail: true,
+  appointmentInApp: true,
+  paymentEmail: true,
+  paymentInApp: true,
+  queueEmail: false,
+  queueInApp: true,
+  prescriptionEmail: true,
+  prescriptionInApp: true,
+  announcementEmail: true,
+  announcementInApp: true,
 };

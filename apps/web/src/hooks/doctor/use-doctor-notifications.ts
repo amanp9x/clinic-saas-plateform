@@ -33,7 +33,7 @@ function useInvalidateNotifications() {
 export function useMarkNotificationRead() {
   const invalidate = useInvalidateNotifications();
   return useMutation({
-    mutationFn: (id: string) => apiFetch<null>(`/api/v1/notifications/${id}/read`, { method: 'POST' }),
+    mutationFn: (id: string) => apiFetch<null>(`/api/v1/notifications/${id}/read`, { method: 'PATCH' }),
     onSuccess: invalidate,
   });
 }
@@ -41,7 +41,15 @@ export function useMarkNotificationRead() {
 export function useMarkAllNotificationsRead() {
   const invalidate = useInvalidateNotifications();
   return useMutation({
-    mutationFn: () => apiFetch<null>('/api/v1/notifications/read-all', { method: 'POST' }),
+    mutationFn: () => apiFetch<null>('/api/v1/notifications/read-all', { method: 'PATCH' }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteNotification() {
+  const invalidate = useInvalidateNotifications();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<null>(`/api/v1/notifications/${id}`, { method: 'DELETE' }),
     onSuccess: invalidate,
   });
 }
@@ -49,7 +57,7 @@ export function useMarkAllNotificationsRead() {
 export function useDoctorNotificationPreferences() {
   return useQuery({
     queryKey: [...NOTIFICATIONS_KEY, 'preferences'],
-    queryFn: () => apiFetch<{ preferences: NotificationPreferenceDto }>('/api/v1/notifications/preferences'),
+    queryFn: () => apiFetch<{ preferences: NotificationPreferenceDto }>('/api/v1/notification-preferences'),
     select: (data) => data.preferences,
   });
 }
@@ -58,10 +66,12 @@ export function useUpdateDoctorNotificationPreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: NotificationPreferenceInput) =>
-      apiFetch<{ preferences: NotificationPreferenceDto }>('/api/v1/notifications/preferences', {
-        method: 'PUT',
+      apiFetch<{ preferences: NotificationPreferenceDto }>('/api/v1/notification-preferences', {
+        method: 'PATCH',
         body: input,
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [...NOTIFICATIONS_KEY, 'preferences'] }),
   });
 }
+
+export { NOTIFICATIONS_KEY };

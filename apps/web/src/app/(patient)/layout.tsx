@@ -9,8 +9,11 @@ import { PatientNavLinks } from '@/components/patient/patient-nav-links';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { useAuth } from '@/hooks/use-auth';
 import { useLogout } from '@/hooks/use-auth-mutations';
+import { useNotifications, useUnreadNotificationCount, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/patient/use-notifications';
+import { useNotificationSocket } from '@/hooks/use-notification-socket';
 import { UserRole } from '@clinic/shared';
 
 function PatientPortalShell({ children }: { children: ReactNode }) {
@@ -18,6 +21,11 @@ function PatientPortalShell({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const logout = useLogout();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: notifications } = useNotifications();
+  const { data: unreadCount } = useUnreadNotificationCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  useNotificationSocket(['patient', 'notifications']);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && user.role !== UserRole.PATIENT) {
@@ -66,6 +74,14 @@ function PatientPortalShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
 
+          <div className="flex items-center gap-1">
+          <NotificationBell
+            notifications={notifications?.items ?? []}
+            unreadCount={unreadCount ?? 0}
+            onMarkRead={(id) => markRead.mutate(id)}
+            onMarkAllRead={() => markAllRead.mutate()}
+            viewAllHref="/notifications"
+          />
           <DropdownMenu>
             <DropdownMenuTrigger>
               <Button variant="outline" size="sm">
@@ -82,6 +98,7 @@ function PatientPortalShell({ children }: { children: ReactNode }) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          </div>
         </header>
 
         <main className="flex-1 bg-muted/10 p-4 lg:p-8">{children}</main>

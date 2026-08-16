@@ -47,6 +47,9 @@ export const CLINIC_PERMISSIONS = {
   PAYMENT_VIEW: 'payment.view',
   PAYMENT_REFUND: 'payment.refund',
   BILLING_VIEW: 'billing.view',
+
+  // Phase 10 — Notifications & Communication.
+  NOTIFICATION_ANNOUNCE: 'notification.announce',
 } as const;
 
 export type ClinicPermission = (typeof CLINIC_PERMISSIONS)[keyof typeof CLINIC_PERMISSIONS];

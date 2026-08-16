@@ -18,7 +18,9 @@ import { resolveDoctorOrThrow } from '../doctor/doctor.shared.js';
 import { doctorAppointmentsRepository } from '../doctor-appointments/doctor-appointments.repository.js';
 import { doctorPatientsRepository } from '../doctor-patients/doctor-patients.repository.js';
 import { consultationRepository } from '../doctor-consultation/consultation.repository.js';
-import { notifyUser } from '../notifications/notifications.service.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import { prescriptionReadyEmail } from '../notifications/email/templates.js';
+import { env } from '../../config/env.js';
 import { prisma } from '../../config/database.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
@@ -194,13 +196,27 @@ export const prescriptionService = {
 
     recordAuditLog({ actorUserId: userId, action: 'doctor.prescription_finalized', entityType: 'Prescription', entityId: id });
 
+    const patientUser = await prisma.user.findUnique({ where: { id: existing.patient.userId }, select: { email: true } });
     await notifyUser({
       userId: existing.patient.userId,
       type: NotificationType.PRESCRIPTION_READY,
       title: 'New prescription available',
+      // Deliberately generic — never medicine names, dosages, or diagnosis in the notification
+      // preview/email. Sign-in is required to view the actual prescription.
       message: `${doctor.displayName} has issued a new prescription for you.`,
       relatedEntityType: 'Prescription',
       relatedEntityId: id,
+      actionUrl: '/medical-records/prescriptions',
+      notificationKey: `prescription:${id}:ready`,
+      email:
+        patientUser?.email && existing.appointment?.clinic
+          ? prescriptionReadyEmail({
+              clinicName: existing.appointment.clinic.name,
+              patientName: existing.patient.fullName,
+              doctorName: doctor.displayName,
+              actionUrl: `${env.WEB_URL}/medical-records/prescriptions`,
+            })
+          : undefined,
     });
 
     return toDoctorPrescriptionDto(updated);

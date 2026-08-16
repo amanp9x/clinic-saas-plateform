@@ -187,7 +187,7 @@ describe('POST /api/v1/appointments/:id/cancel', () => {
     expect(res.body.data.appointment.status).toBe('CANCELLED');
 
     const notifications = await prisma.notification.findMany({ where: { userId } });
-    expect(notifications.some((n) => n.type === 'APPOINTMENT_UPDATE')).toBe(true);
+    expect(notifications.some((n) => n.type === 'APPOINTMENT_CANCELLED')).toBe(true);
   });
 
   it('rejects cancelling an already-completed appointment', async () => {
@@ -283,12 +283,12 @@ describe('Notifications endpoints', () => {
 
     const firstId = listRes.body.data.items[0].id;
     const markOneRes = await request(app)
-      .post(`/api/v1/notifications/${firstId}/read`)
+      .patch(`/api/v1/notifications/${firstId}/read`)
       .set('Authorization', `Bearer ${token}`);
     expect(markOneRes.status).toBe(200);
 
     const markAllRes = await request(app)
-      .post('/api/v1/notifications/read-all')
+      .patch('/api/v1/notifications/read-all')
       .set('Authorization', `Bearer ${token}`);
     expect(markAllRes.status).toBe(200);
 
@@ -298,11 +298,22 @@ describe('Notifications endpoints', () => {
     expect(finalUnread.body.data.count).toBe(0);
 
     const prefRes = await request(app)
-      .put('/api/v1/notifications/preferences')
+      .patch('/api/v1/notification-preferences')
       .set('Authorization', `Bearer ${token}`)
-      .send({ appointmentUpdates: false, queueUpdates: true, prescriptionReady: true, reportReady: false, channel: 'SMS' });
+      .send({
+        appointmentEmail: false,
+        appointmentInApp: true,
+        paymentEmail: true,
+        paymentInApp: true,
+        queueEmail: false,
+        queueInApp: true,
+        prescriptionEmail: true,
+        prescriptionInApp: true,
+        announcementEmail: false,
+        announcementInApp: true,
+      });
     expect(prefRes.status).toBe(200);
-    expect(prefRes.body.data.preferences.channel).toBe('SMS');
+    expect(prefRes.body.data.preferences.appointmentEmail).toBe(false);
   });
 });
 

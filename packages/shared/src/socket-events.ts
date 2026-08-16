@@ -59,6 +59,8 @@ export const SOCKET_EVENTS = {
   },
   NOTIFICATION: {
     CREATED: 'notification.created',
+    READ: 'notification.read',
+    UNREAD_COUNT_UPDATED: 'notification.unread_count_updated',
   },
   CLINIC: {
     UPDATED: 'clinic.updated',

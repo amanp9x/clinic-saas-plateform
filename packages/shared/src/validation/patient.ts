@@ -76,14 +76,7 @@ export const appointmentListQuerySchema = z.object({
 });
 export type AppointmentListQuery = z.infer<typeof appointmentListQuerySchema>;
 
-export const notificationPreferenceSchema = z.object({
-  appointmentUpdates: z.boolean(),
-  queueUpdates: z.boolean(),
-  prescriptionReady: z.boolean(),
-  reportReady: z.boolean(),
-  channel: z.enum(['EMAIL', 'SMS', 'BOTH', 'NONE']),
-});
-export type NotificationPreferenceInput = z.infer<typeof notificationPreferenceSchema>;
+// notificationPreferenceSchema moved to validation/notification.ts (Phase 10).
 
 export const notificationListQuerySchema = z.object({
   unreadOnly: z

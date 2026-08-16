@@ -1,4 +1,4 @@
-import type { NotificationType } from '@prisma/client';
+import type { NotificationPriority, NotificationType } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 
 export const notificationsRepository = {
@@ -9,6 +9,10 @@ export const notificationsRepository = {
     message: string;
     relatedEntityType?: string;
     relatedEntityId?: string;
+    actionUrl?: string;
+    notificationKey?: string;
+    priority: NotificationPriority;
+    expiresAt: Date | null;
   }) {
     return prisma.notification.create({ data: input });
   },
@@ -27,8 +31,14 @@ export const notificationsRepository = {
     return { items, total };
   },
 
+  /** Indexed count-only query (userId+isRead composite index) — never fetches notification rows
+   * just to compute this. */
   countUnread(userId: string) {
     return prisma.notification.count({ where: { userId, isRead: false } });
+  },
+
+  findByIdForUser(id: string, userId: string) {
+    return prisma.notification.findFirst({ where: { id, userId } });
   },
 
   markRead(id: string, userId: string) {
@@ -39,6 +49,10 @@ export const notificationsRepository = {
     return prisma.notification.updateMany({ where: { userId, isRead: false }, data: { isRead: true } });
   },
 
+  deleteForUser(id: string, userId: string) {
+    return prisma.notification.deleteMany({ where: { id, userId } });
+  },
+
   getPreference(userId: string) {
     return prisma.notificationPreference.findUnique({ where: { userId } });
   },
@@ -46,11 +60,16 @@ export const notificationsRepository = {
   upsertPreference(
     userId: string,
     data: {
-      appointmentUpdates: boolean;
-      queueUpdates: boolean;
-      prescriptionReady: boolean;
-      reportReady: boolean;
-      channel: 'EMAIL' | 'SMS' | 'BOTH' | 'NONE';
+      appointmentEmail: boolean;
+      appointmentInApp: boolean;
+      paymentEmail: boolean;
+      paymentInApp: boolean;
+      queueEmail: boolean;
+      queueInApp: boolean;
+      prescriptionEmail: boolean;
+      prescriptionInApp: boolean;
+      announcementEmail: boolean;
+      announcementInApp: boolean;
     },
   ) {
     return prisma.notificationPreference.upsert({

@@ -7,7 +7,9 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from '../../u
 import { ErrorCode } from '@clinic/shared';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom, emitToUserRoom } from '../../sockets/emit.js';
-import { notifyUser, NotificationType } from '../notifications/notifications.service.js';
+import { NotificationType } from '@prisma/client';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import { paymentSuccessfulEmail, paymentFailedEmail, refundCompletedEmail } from '../notifications/email/templates.js';
 import { patientRepository } from '../patient/patient.repository.js';
 import { assertClinicPermission } from '../reception/reception.shared.js';
 import { resolveDoctorOrThrow } from '../doctor/doctor.shared.js';
@@ -68,11 +70,12 @@ async function expireIfStale(payment: PaymentWithRelations): Promise<PaymentWith
     });
     await notifyUser({
       userId: payment.appointment.patient.userId,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.PAYMENT_FAILED,
       title: 'Payment window expired',
       message: `Your payment window for ${payment.appointment.bookingReference} has expired and the slot has been released.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: payment.appointmentId,
+      relatedEntityType: 'Payment',
+      relatedEntityId: payment.id,
+      notificationKey: `payment:${payment.id}:expired`,
     });
     emitToUserRoom(payment.appointment.patient.userId, SOCKET_EVENTS.PAYMENT.FAILED, { paymentId: payment.id, status: 'CANCELLED' });
   }
@@ -165,11 +168,23 @@ async function applyCapture(
   });
   await notifyUser({
     userId: payment.appointment.patient.userId,
-    type: NotificationType.APPOINTMENT_UPDATE,
+    type: NotificationType.PAYMENT_SUCCESS,
     title: 'Payment successful',
     message: `Payment received for ${payment.appointment.bookingReference}. Your appointment with ${payment.appointment.doctor.displayName} is confirmed.`,
-    relatedEntityType: 'Appointment',
-    relatedEntityId: payment.appointmentId,
+    relatedEntityType: 'Payment',
+    relatedEntityId: payment.id,
+    actionUrl: `/appointments/${payment.appointmentId}`,
+    notificationKey: `payment:${payment.id}:captured`,
+    email: payment.appointment.patient.user.email
+      ? paymentSuccessfulEmail({
+          clinicName: payment.appointment.clinic.name,
+          patientName: payment.appointment.patient.fullName,
+          bookingReference: payment.appointment.bookingReference,
+          amount: details.amount,
+          currency: payment.currency,
+          actionUrl: `${env.WEB_URL}/appointments/${payment.appointmentId}`,
+        })
+      : undefined,
   });
   emitToClinicRoom(payment.clinicId, SOCKET_EVENTS.PAYMENT.CAPTURED, { paymentId: payment.id, appointmentId: payment.appointmentId, clinicId: payment.clinicId });
   emitToUserRoom(payment.appointment.patient.userId, SOCKET_EVENTS.PAYMENT.CAPTURED, { paymentId: payment.id });
@@ -196,11 +211,23 @@ async function applyFailure(payment: PaymentWithRelations, attemptId: string | u
     });
     await notifyUser({
       userId: payment.appointment.patient.userId,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.PAYMENT_FAILED,
       title: 'Payment failed',
       message: `Payment for ${payment.appointment.bookingReference} could not be completed. You can retry from your appointment.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: payment.appointmentId,
+      relatedEntityType: 'Payment',
+      relatedEntityId: payment.id,
+      actionUrl: `/appointments/${payment.appointmentId}`,
+      notificationKey: `payment:${payment.id}:failed:${attemptId ?? 'unknown'}`,
+      email: payment.appointment.patient.user.email
+        ? paymentFailedEmail({
+            clinicName: payment.appointment.clinic.name,
+            patientName: payment.appointment.patient.fullName,
+            bookingReference: payment.appointment.bookingReference,
+            amount: Number(payment.amount),
+            currency: payment.currency,
+            actionUrl: `${env.WEB_URL}/appointments/${payment.appointmentId}`,
+          })
+        : undefined,
     });
     emitToUserRoom(payment.appointment.patient.userId, SOCKET_EVENTS.PAYMENT.FAILED, { paymentId: payment.id });
   }
@@ -271,11 +298,13 @@ export const paymentEngine = {
     });
     await notifyUser({
       userId,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.PAYMENT_PENDING,
       title: 'Payment initiated',
       message: `Complete your payment of ${price.currency} ${price.amount} for appointment ${appointment.bookingReference}.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: appointmentId,
+      relatedEntityType: 'Payment',
+      relatedEntityId: created.id,
+      actionUrl: `/payment/${appointmentId}`,
+      notificationKey: `payment:${created.id}:pending`,
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PAYMENT.CREATED, { paymentId: created.id, appointmentId, clinicId: appointment.clinicId });
 
@@ -633,11 +662,23 @@ async function performRefund(payment: PaymentWithRelations, input: { amount: num
     });
     await notifyUser({
       userId: payment.appointment.patient.userId,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.PAYMENT_REFUNDED,
       title: isFull ? 'Refund completed' : 'Partial refund completed',
       message: `A refund of ${payment.currency} ${input.amount} for ${payment.appointment.bookingReference} has been processed.`,
-      relatedEntityType: 'Appointment',
-      relatedEntityId: payment.appointmentId,
+      relatedEntityType: 'Payment',
+      relatedEntityId: payment.id,
+      actionUrl: `/appointments/${payment.appointmentId}`,
+      notificationKey: `refund:${refundRow.id}:completed`,
+      email: payment.appointment.patient.user.email
+        ? refundCompletedEmail({
+            clinicName: payment.appointment.clinic.name,
+            patientName: payment.appointment.patient.fullName,
+            bookingReference: payment.appointment.bookingReference,
+            amount: input.amount,
+            currency: payment.currency,
+            actionUrl: `${env.WEB_URL}/appointments/${payment.appointmentId}`,
+          })
+        : undefined,
     });
     emitToClinicRoom(payment.clinicId, SOCKET_EVENTS.PAYMENT.REFUNDED, { paymentId: payment.id, clinicId: payment.clinicId, amount: input.amount });
     emitToUserRoom(payment.appointment.patient.userId, SOCKET_EVENTS.PAYMENT.REFUNDED, { paymentId: payment.id });

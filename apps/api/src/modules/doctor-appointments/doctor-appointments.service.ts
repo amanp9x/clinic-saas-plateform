@@ -10,6 +10,7 @@ import { prisma } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
 
 const ACTIVE_STATUSES = new Set<AppointmentStatus>([
   AppointmentStatus.CONFIRMED,
@@ -69,6 +70,16 @@ export const doctorAppointmentsEngine = {
     }
 
     recordAuditLog({ actorUserId, action: 'queue.consultation_started', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId, metadata: { doctorId: doctor.id } });
+    await notifyUser({
+      userId: appointment.patient.userId,
+      type: 'CONSULTATION_STARTED',
+      title: 'Consultation started',
+      message: `${doctor.displayName} has started your consultation.`,
+      relatedEntityType: 'Appointment',
+      relatedEntityId: appointment.id,
+      actionUrl: `/queue/${appointment.id}`,
+      notificationKey: `appointment:${appointment.id}:consultation_started`,
+    });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.STARTED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.IN_CONSULTATION, { appointmentId: appointment.id, clinicId: appointment.clinicId });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: updated.status });
@@ -89,6 +100,16 @@ export const doctorAppointmentsEngine = {
     }
 
     recordAuditLog({ actorUserId, action: 'queue.appointment_no_show', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId });
+    await notifyUser({
+      userId: appointment.patient.userId,
+      type: 'APPOINTMENT_NO_SHOW',
+      title: 'Marked as no-show',
+      message: `You were marked as a no-show for your appointment on ${appointment.scheduledAt.toLocaleDateString('en-IN')}.`,
+      relatedEntityType: 'Appointment',
+      relatedEntityId: appointment.id,
+      actionUrl: `/appointments/${appointment.id}`,
+      notificationKey: `appointment:${appointment.id}:no_show`,
+    });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: updated.status });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
     return toDoctorAppointmentDetail(updated);
@@ -109,6 +130,15 @@ export const doctorAppointmentsEngine = {
     }
 
     recordAuditLog({ actorUserId, action: 'queue.appointment_skipped', entityType: 'Appointment', entityId: appointment.id, clinicId: appointment.clinicId, metadata: { reason } });
+    await notifyUser({
+      userId: appointment.patient.userId,
+      type: 'PATIENT_SKIPPED',
+      title: "You've been skipped in the queue",
+      message: 'Please check in with reception to be added back to the queue.',
+      relatedEntityType: 'Appointment',
+      relatedEntityId: appointment.id,
+      actionUrl: `/queue/${appointment.id}`,
+    });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.SKIPPED, { clinicId: appointment.clinicId, appointmentId: appointment.id });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
     return toDoctorAppointmentDetail(appointment);

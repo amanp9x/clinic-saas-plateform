@@ -14,8 +14,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { useAuth } from '@/hooks/use-auth';
 import { useLogout } from '@/hooks/use-auth-mutations';
+import { useGenericNotifications, useGenericUnreadCount, useGenericMarkRead, useGenericMarkAllRead } from '@/hooks/use-notifications';
+import { useNotificationSocket } from '@/hooks/use-notification-socket';
 import { UserRole } from '@clinic/shared';
 
 const ALLOWED_ROLES: UserRole[] = [UserRole.RECEPTIONIST, UserRole.CLINIC_STAFF, UserRole.CLINIC_ADMIN];
@@ -25,6 +28,11 @@ function ReceptionPortalShell({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const logout = useLogout();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: notifications } = useGenericNotifications('reception');
+  const { data: unreadCount } = useGenericUnreadCount('reception');
+  const markRead = useGenericMarkRead('reception');
+  const markAllRead = useGenericMarkAllRead('reception');
+  useNotificationSocket(['reception', 'notifications']);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && !ALLOWED_ROLES.includes(user.role)) {
@@ -74,6 +82,13 @@ function ReceptionPortalShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-3">
+            <NotificationBell
+              notifications={notifications?.items ?? []}
+              unreadCount={unreadCount ?? 0}
+              onMarkRead={(id) => markRead.mutate(id)}
+              onMarkAllRead={() => markAllRead.mutate()}
+              viewAllHref="/reception/notifications"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger>
                 <Button variant="outline" size="sm">

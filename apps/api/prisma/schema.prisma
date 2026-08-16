@@ -108,19 +108,75 @@ enum AddressLabel {
   OTHER
 }
 
+/// Legacy generic types (APPOINTMENT_UPDATE/QUEUE_UPDATE/SYSTEM) predate Phase 10's granular
+/// event-typed notifications and are kept only for backward compatibility with already-persisted
+/// rows — new dispatch call sites use the specific type below instead of these.
 enum NotificationType {
   APPOINTMENT_UPDATE
   QUEUE_UPDATE
   PRESCRIPTION_READY
   REPORT_READY
   SYSTEM
+
+  APPOINTMENT_BOOKED
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_RESCHEDULED
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_CHECKED_IN
+  APPOINTMENT_NO_SHOW
+  APPOINTMENT_REMINDER
+  APPOINTMENT_STARTING_SOON
+
+  PAYMENT_PENDING
+  PAYMENT_SUCCESS
+  PAYMENT_FAILED
+  PAYMENT_REFUNDED
+  PAYMENT_REFUND_PENDING
+
+  QUEUE_CHECKED_IN
+  PATIENT_CALLED
+  PATIENT_SKIPPED
+  QUEUE_DELAY_UPDATED
+  DOCTOR_DELAYED
+  DOCTOR_ON_TIME
+  QUEUE_PAUSED
+  QUEUE_RESUMED
+
+  CONSULTATION_STARTED
+  CONSULTATION_COMPLETED
+
+  DOCTOR_STATUS_CHANGED
+
+  CLINIC_ANNOUNCEMENT
+
+  REVIEW_RECEIVED
+  REVIEW_RESPONSE
+
+  SECURITY_LOGIN
+  SECURITY_PASSWORD_CHANGED
 }
 
-enum NotificationChannel {
-  EMAIL
-  SMS
-  BOTH
-  NONE
+/// Governs whether a notification's delivery can be suppressed by user preference.
+/// TRANSACTIONAL/SECURITY always deliver in-app + email regardless of NotificationPreference.
+enum NotificationTier {
+  TRANSACTIONAL
+  SECURITY
+  OPTIONAL
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum NotificationDeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
 }
 
 /// Doctor's manually-set availability/session status for a clinic session on a given day.
@@ -1384,39 +1440,91 @@ model MedicalRecord {
   @@map("medical_records")
 }
 
+/// Central in-app notification record — the single sink every module dispatches through (see
+/// modules/notifications/notification-dispatch.service.ts). `notificationKey`, when supplied by
+/// the caller, is a deterministic idempotency key (e.g. "reminder:<appointmentId>:24h" or
+/// "payment:<paymentId>:captured") — its unique constraint is what guarantees a duplicated source
+/// event (a retried webhook, a re-processed reminder tick) produces exactly one logical
+/// notification, not the application code's own "did I already do this" bookkeeping.
 model Notification {
-  id                String           @id @default(uuid())
+  id                String               @id @default(uuid())
   userId            String
   type              NotificationType
   title             String
   message           String
-  isRead            Boolean          @default(false)
+  isRead            Boolean              @default(false)
   relatedEntityType String?
   relatedEntityId   String?
+  actionUrl         String?
+  priority          NotificationPriority @default(NORMAL)
+  /// Nullable + unique: Postgres unique indexes ignore NULLs, so ad-hoc notifications (no key
+  /// supplied) never collide with each other while keyed ones are still deduplicated.
+  notificationKey   String?              @unique
+  /// Set for inherently time-bound notices (e.g. a delay update) so the UI can stop surfacing
+  /// them as "current" once stale — the row itself is never deleted for audit/history purposes.
+  expiresAt         DateTime?
 
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+  @@index([type])
+  @@index([expiresAt])
   @@map("notifications")
 }
 
+/// One row per (recipient, notification-category) — replaces the old single-`channel` design
+/// with independent Email/In-app toggles per category, per spec. TRANSACTIONAL/SECURITY-tier
+/// notification types (see notification-type-config.ts) never consult this table at all — they
+/// always deliver both channels, so there is deliberately no "security" or "transactional" row
+/// here to toggle off.
 model NotificationPreference {
-  id                 String              @id @default(uuid())
-  userId             String              @unique
-  appointmentUpdates Boolean             @default(true)
-  queueUpdates       Boolean             @default(true)
-  prescriptionReady  Boolean             @default(true)
-  reportReady        Boolean             @default(true)
-  channel            NotificationChannel @default(EMAIL)
+  id     String @id @default(uuid())
+  userId String @unique
+
+  appointmentEmail  Boolean @default(true)
+  appointmentInApp  Boolean @default(true)
+  paymentEmail      Boolean @default(true)
+  paymentInApp      Boolean @default(true)
+  queueEmail        Boolean @default(false)
+  queueInApp        Boolean @default(true)
+  prescriptionEmail Boolean @default(true)
+  prescriptionInApp Boolean @default(true)
+  announcementEmail Boolean @default(true)
+  announcementInApp Boolean @default(true)
 
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notification_preferences")
+}
+
+/// Tracks an individual email delivery attempt for a Notification — never the provider's secret
+/// credentials, only what's needed to show delivery status and drive bounded retry.
+model NotificationDelivery {
+  id                String                     @id @default(uuid())
+  notificationId    String
+  recipientEmail    String
+  provider          String
+  status            NotificationDeliveryStatus @default(QUEUED)
+  providerMessageId String?
+  attempts          Int                        @default(0)
+  lastAttemptAt     DateTime?
+  sentAt            DateTime?
+  failureReason     String?
+
+  createdAt DateTime @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@index([notificationId])
+  @@index([status])
+  @@index([providerMessageId])
+  @@map("notification_deliveries")
 }
 
 /// Receptionists / clinic staff / clinic admins scoped to a specific clinic.

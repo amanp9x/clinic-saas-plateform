@@ -16,8 +16,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotificationBell } from '@/components/notifications/notification-bell';
 import { useAuth } from '@/hooks/use-auth';
 import { useLogout } from '@/hooks/use-auth-mutations';
+import { useDoctorNotifications, useUnreadNotificationCount, useMarkNotificationRead, useMarkAllNotificationsRead } from '@/hooks/doctor/use-doctor-notifications';
+import { useNotificationSocket } from '@/hooks/use-notification-socket';
 import { UserRole } from '@clinic/shared';
 
 function DoctorPortalShell({ children }: { children: ReactNode }) {
@@ -25,6 +28,11 @@ function DoctorPortalShell({ children }: { children: ReactNode }) {
   const { user, isAuthenticated, isLoading } = useAuth();
   const logout = useLogout();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: notifications } = useDoctorNotifications();
+  const { data: unreadCount } = useUnreadNotificationCount();
+  const markRead = useMarkNotificationRead();
+  const markAllRead = useMarkAllNotificationsRead();
+  useNotificationSocket(['doctor', 'notifications']);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user && user.role !== UserRole.DOCTOR) {
@@ -75,6 +83,13 @@ function DoctorPortalShell({ children }: { children: ReactNode }) {
 
           <div className="flex items-center gap-3">
             <DoctorStatusSwitcher />
+            <NotificationBell
+              notifications={notifications?.items ?? []}
+              unreadCount={unreadCount ?? 0}
+              onMarkRead={(id) => markRead.mutate(id)}
+              onMarkAllRead={() => markAllRead.mutate()}
+              viewAllHref="/doctor/notifications"
+            />
             <DropdownMenu>
               <DropdownMenuTrigger>
                 <Button variant="outline" size="sm">

@@ -2,16 +2,27 @@ import type { AppointmentType, BookingSource, ConsultationType, Prisma } from '@
 import { AppointmentStatus, NotificationType } from '@prisma/client';
 import { SOCKET_EVENTS } from '@clinic/shared';
 import { prisma } from '../../config/database.js';
+import { env } from '../../config/env.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom, emitToUserRoom } from '../../sockets/emit.js';
-import { notifyUser } from '../notifications/notifications.service.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import {
+  appointmentBookedEmail,
+  appointmentCancelledEmail,
+  appointmentConfirmedEmail,
+  appointmentRescheduledEmail,
+} from '../notifications/email/templates.js';
 import { isUniqueConstraintError } from '../doctor-queue/queue.repository.js';
 import { requireDoctorAtClinic } from '../reception/reception.shared.js';
 import { timeMinutes } from '../../utils/time.util.js';
 import { generateAvailableSlots } from './booking.availability.js';
 import { bookingRepository, HOLD_MINUTES_DEFAULT, HOLD_MINUTES_INTERNAL } from './booking.repository.js';
 import { generateBookingReference } from './booking-reference.util.js';
+
+function appointmentUrl(appointmentId: string): string {
+  return `${env.WEB_URL}/appointments/${appointmentId}`;
+}
 
 const RESCHEDULABLE_STATUSES = new Set<AppointmentStatus>([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]);
 export const CANCELLABLE_STATUSES = new Set<AppointmentStatus>([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]);
@@ -280,22 +291,46 @@ export const bookingEngine = {
     if (initialStatus === AppointmentStatus.CONFIRMED) {
       await notifyUser({
         userId: appointment.patient.user.id,
-        type: NotificationType.APPOINTMENT_UPDATE,
+        type: NotificationType.APPOINTMENT_CONFIRMED,
         title: 'Appointment confirmed',
         message: `Your appointment with ${appointment.doctor.displayName} on ${scheduledAt.toLocaleString('en-IN')} is confirmed. Reference: ${bookingReference}.`,
         relatedEntityType: 'Appointment',
         relatedEntityId: appointment.id,
+        actionUrl: `/appointments/${appointment.id}`,
+        notificationKey: `appointment:${appointment.id}:confirmed`,
+        email: appointment.patient.user.email
+          ? appointmentConfirmedEmail({
+              clinicName: appointment.clinic.name,
+              doctorName: appointment.doctor.displayName,
+              patientName: appointment.patient.fullName,
+              bookingReference,
+              scheduledAt,
+              actionUrl: appointmentUrl(appointment.id),
+            })
+          : undefined,
       });
     } else {
       // Payment module sends its own "payment initiated"/"payment successful" notifications —
       // this one just tells the patient the slot is held pending payment, no double-messaging.
       await notifyUser({
         userId: appointment.patient.user.id,
-        type: NotificationType.APPOINTMENT_UPDATE,
+        type: NotificationType.APPOINTMENT_BOOKED,
         title: 'Appointment reserved — payment required',
         message: `Your appointment with ${appointment.doctor.displayName} on ${scheduledAt.toLocaleString('en-IN')} is reserved. Complete payment to confirm it. Reference: ${bookingReference}.`,
         relatedEntityType: 'Appointment',
         relatedEntityId: appointment.id,
+        actionUrl: `/appointments/${appointment.id}`,
+        notificationKey: `appointment:${appointment.id}:booked`,
+        email: appointment.patient.user.email
+          ? appointmentBookedEmail({
+              clinicName: appointment.clinic.name,
+              doctorName: appointment.doctor.displayName,
+              patientName: appointment.patient.fullName,
+              bookingReference,
+              scheduledAt,
+              actionUrl: appointmentUrl(appointment.id),
+            })
+          : undefined,
       });
     }
     emitToClinicRoom(clinicId, SOCKET_EVENTS.APPOINTMENT.CREATED, { appointmentId: appointment.id, clinicId, doctorId, scheduledAt: scheduledAt.toISOString() });
@@ -429,11 +464,23 @@ export const bookingEngine = {
     });
     await notifyUser({
       userId: appointment.patient.user.id,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.APPOINTMENT_RESCHEDULED,
       title: 'Appointment rescheduled',
       message: `Your appointment with ${appointment.doctor.displayName} has been moved to ${newScheduledAt.toLocaleString('en-IN')}.`,
       relatedEntityType: 'Appointment',
       relatedEntityId: appointmentId,
+      actionUrl: `/appointments/${appointmentId}`,
+      notificationKey: `appointment:${appointmentId}:rescheduled:${newScheduledAt.getTime()}`,
+      email: appointment.patient.user.email
+        ? appointmentRescheduledEmail({
+            clinicName: appointment.clinic.name,
+            doctorName: appointment.doctor.displayName,
+            patientName: appointment.patient.fullName,
+            bookingReference: appointment.bookingReference,
+            scheduledAt: newScheduledAt,
+            actionUrl: appointmentUrl(appointmentId),
+          })
+        : undefined,
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.RESCHEDULED, {
       appointmentId,
@@ -481,11 +528,23 @@ export const bookingEngine = {
     });
     await notifyUser({
       userId: appointment.patient.user.id,
-      type: NotificationType.APPOINTMENT_UPDATE,
+      type: NotificationType.APPOINTMENT_CANCELLED,
       title: 'Appointment cancelled',
       message: `Your appointment with ${appointment.doctor.displayName} on ${appointment.scheduledAt.toLocaleDateString('en-IN')} has been cancelled.`,
       relatedEntityType: 'Appointment',
       relatedEntityId: appointment.id,
+      actionUrl: `/appointments/${appointment.id}`,
+      notificationKey: `appointment:${appointment.id}:cancelled`,
+      email: appointment.patient.user.email
+        ? appointmentCancelledEmail({
+            clinicName: appointment.clinic.name,
+            doctorName: appointment.doctor.displayName,
+            patientName: appointment.patient.fullName,
+            bookingReference: appointment.bookingReference,
+            scheduledAt: appointment.scheduledAt,
+            actionUrl: appointmentUrl(appointment.id),
+          })
+        : undefined,
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.CANCELLED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: 'CANCELLED' });
     emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.CANCELLED, { appointmentId: appointment.id });

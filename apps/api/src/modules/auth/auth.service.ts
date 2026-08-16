@@ -15,6 +15,8 @@ import {
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { env } from '../../config/env.js';
 import { identifierType } from '../../utils/identifier.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import { securityLoginEmail } from '../notifications/email/templates.js';
 import type {
   ChangePasswordInput,
   LoginInput,
@@ -110,6 +112,25 @@ export const authService = {
       ipAddress: ctx.ipAddress,
     });
 
+    // No device-fingerprint/"known devices" tracking exists in this codebase, so this fires on
+    // every successful login rather than only unrecognized ones — a documented scope limitation,
+    // not an oversight (see Phase 10 completion report).
+    await notifyUser({
+      userId: user.id,
+      type: 'SECURITY_LOGIN',
+      title: 'New sign-in to your account',
+      message: `We noticed a new sign-in to your account${ctx.ipAddress ? ` from ${ctx.ipAddress}` : ''} at ${new Date().toLocaleString('en-IN')}.`,
+      relatedEntityType: 'User',
+      relatedEntityId: user.id,
+      email: user.email
+        ? securityLoginEmail({
+            patientName: user.email,
+            whenLabel: `at ${new Date().toLocaleString('en-IN')}`,
+            actionUrl: `${env.WEB_URL}/settings/security`,
+          })
+        : undefined,
+    });
+
     return { user, tokens };
   },
 
@@ -184,6 +205,14 @@ export const authService = {
       action: 'auth.password_changed',
       entityType: 'User',
       entityId: userId,
+    });
+    await notifyUser({
+      userId,
+      type: 'SECURITY_PASSWORD_CHANGED',
+      title: 'Password changed',
+      message: 'Your account password was changed. If this wasn’t you, contact support immediately.',
+      relatedEntityType: 'User',
+      relatedEntityId: userId,
     });
   },
 

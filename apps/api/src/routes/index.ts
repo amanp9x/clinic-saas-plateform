@@ -8,6 +8,8 @@ import { favoritesRouter } from '../modules/favorites/favorites.routes.js';
 import { appointmentsRouter } from '../modules/appointments/appointments.routes.js';
 import { medicalRecordsRouter } from '../modules/medical-records/medical-records.routes.js';
 import { notificationsRouter } from '../modules/notifications/notifications.routes.js';
+import { notificationPreferencesRouter } from '../modules/notifications/notification-preferences.routes.js';
+import { clinicAnnouncementRouter } from '../modules/notifications/clinic-announcement.routes.js';
 import { dashboardRouter } from '../modules/dashboard/dashboard.routes.js';
 import { doctorRouter } from '../modules/doctor/doctor.routes.js';
 import { doctorAppointmentsRouter } from '../modules/doctor-appointments/doctor-appointments.routes.js';
@@ -45,6 +47,7 @@ apiRouter.use('/favorites', favoritesRouter);
 apiRouter.use('/appointments', appointmentsRouter);
 apiRouter.use('/medical-records', medicalRecordsRouter);
 apiRouter.use('/notifications', notificationsRouter);
+apiRouter.use('/notification-preferences', notificationPreferencesRouter);
 apiRouter.use('/dashboard', dashboardRouter);
 
 // --- Payments & Billing (Phase 9) --------------------------------------------
@@ -84,4 +87,5 @@ apiRouter.use('/clinic/audit-logs', clinicAuditRouter);
 apiRouter.use('/clinic/reports', clinicReportsRouter);
 apiRouter.use('/clinic/blocked-slots', blockedSlotsRouter);
 apiRouter.use('/clinic/billing', clinicBillingRouter);
+apiRouter.use('/clinic/announcements', clinicAnnouncementRouter);
 apiRouter.use('/clinic', clinicRouter);

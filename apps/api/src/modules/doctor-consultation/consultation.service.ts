@@ -10,6 +10,7 @@ import { prisma } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
 
 async function requireOwnedConsultation(doctorId: string, appointmentId: string) {
   const appointment = await doctorAppointmentsRepository.findById(appointmentId, doctorId);
@@ -121,6 +122,17 @@ export const consultationEngine = {
     }
 
     recordAuditLog({ actorUserId, action: 'queue.consultation_completed', entityType: 'Consultation', entityId: updatedConsultation.id, clinicId: appointment.clinicId, metadata: { doctorId: doctor.id } });
+    const patientForNotify = await prisma.patient.findUnique({ where: { id: consultation.patientId }, select: { userId: true } });
+    await notifyUser({
+      userId: patientForNotify!.userId,
+      type: 'CONSULTATION_COMPLETED',
+      title: 'Consultation completed',
+      message: `Your consultation with ${doctor.displayName} is complete.`,
+      relatedEntityType: 'Appointment',
+      relatedEntityId: appointment.id,
+      actionUrl: `/appointments/${appointment.id}`,
+      notificationKey: `appointment:${appointment.id}:consultation_completed`,
+    });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.CONSULTATION.COMPLETED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.COMPLETED, { appointmentId: appointment.id, clinicId: appointment.clinicId });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: 'COMPLETED' });

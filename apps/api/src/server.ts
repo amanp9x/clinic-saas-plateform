@@ -5,6 +5,7 @@ import { connectDatabase, disconnectDatabase } from './config/database.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
 import { env } from './config/env.js';
 import { logger } from './config/logger.js';
+import { startReminderScheduler, stopReminderScheduler } from './modules/notifications/reminder.service.js';
 
 async function main(): Promise<void> {
   await connectDatabase();
@@ -25,8 +26,13 @@ async function main(): Promise<void> {
     logger.info(`API listening on http://localhost:${env.PORT} (${env.NODE_ENV})`);
   });
 
+  // Bounded, self-contained timer (not a job-queue framework) — see reminder.service.ts. Started
+  // only here, never in app.ts/createApp(), so the test suite never has a background timer running.
+  startReminderScheduler();
+
   const shutdown = async (signal: string): Promise<void> => {
     logger.info(`${signal} received, shutting down gracefully`);
+    stopReminderScheduler();
     httpServer.close();
     await Promise.all([disconnectDatabase(), disconnectRedis()]);
     process.exit(0);

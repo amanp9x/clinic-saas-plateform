@@ -7,6 +7,7 @@ import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
 import { generateBookingReference } from '../booking/booking-reference.util.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
 
 const BOOKABLE_STATUSES = new Set<AppointmentStatus>([AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED]);
 
@@ -69,6 +70,16 @@ export const queueEngine = {
       entityId: appointmentId,
       clinicId: appointment.clinicId,
       metadata: { doctorId: appointment.doctorId, patientId: appointment.patientId, tokenId: token.id, tokenNumber: token.tokenNumber },
+    });
+    await notifyUser({
+      userId: appointment.patient.userId,
+      type: 'APPOINTMENT_CHECKED_IN',
+      title: "You're checked in",
+      message: `You've been checked in. Token #${token.tokenNumber}.`,
+      relatedEntityType: 'Appointment',
+      relatedEntityId: appointmentId,
+      actionUrl: `/queue/${appointmentId}`,
+      notificationKey: `appointment:${appointmentId}:checked_in`,
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.PATIENT.CHECKED_IN, { clinicId: appointment.clinicId, appointmentId, token: toTokenDto(token) });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.TOKEN.CREATED, { clinicId: appointment.clinicId, token: toTokenDto(token) });

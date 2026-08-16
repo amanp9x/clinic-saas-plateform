@@ -138,31 +138,8 @@ export interface DownloadItemDto {
   fileUrl: string | null;
 }
 
-export type NotificationTypeValue =
-  | 'APPOINTMENT_UPDATE'
-  | 'QUEUE_UPDATE'
-  | 'PRESCRIPTION_READY'
-  | 'REPORT_READY'
-  | 'SYSTEM';
-
-export interface NotificationDto {
-  id: string;
-  type: NotificationTypeValue;
-  title: string;
-  message: string;
-  isRead: boolean;
-  relatedEntityType: string | null;
-  relatedEntityId: string | null;
-  createdAt: string;
-}
-
-export interface NotificationPreferenceDto {
-  appointmentUpdates: boolean;
-  queueUpdates: boolean;
-  prescriptionReady: boolean;
-  reportReady: boolean;
-  channel: 'EMAIL' | 'SMS' | 'BOTH' | 'NONE';
-}
+// NotificationDto / NotificationPreferenceDto moved to types/notification.ts (Phase 10) —
+// re-exported from the package root unchanged, so this is not a breaking import-path change.
 
 export interface DashboardSummaryDto {
   upcomingAppointment: AppointmentSummaryDto | null;

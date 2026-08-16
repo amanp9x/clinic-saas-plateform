@@ -122,6 +122,84 @@ export const RefundStatus = {
 } as const;
 export type RefundStatus = (typeof RefundStatus)[keyof typeof RefundStatus];
 
+// ---------------------------------------------------------------------------
+// Notifications & Communication Engine (Phase 10)
+// ---------------------------------------------------------------------------
+
+/** Legacy generic types (APPOINTMENT_UPDATE/QUEUE_UPDATE/SYSTEM) predate the granular event-typed
+ * notifications below and exist only for rows persisted before Phase 10. */
+export const NotificationType = {
+  APPOINTMENT_UPDATE: 'APPOINTMENT_UPDATE',
+  QUEUE_UPDATE: 'QUEUE_UPDATE',
+  PRESCRIPTION_READY: 'PRESCRIPTION_READY',
+  REPORT_READY: 'REPORT_READY',
+  SYSTEM: 'SYSTEM',
+
+  APPOINTMENT_BOOKED: 'APPOINTMENT_BOOKED',
+  APPOINTMENT_CONFIRMED: 'APPOINTMENT_CONFIRMED',
+  APPOINTMENT_RESCHEDULED: 'APPOINTMENT_RESCHEDULED',
+  APPOINTMENT_CANCELLED: 'APPOINTMENT_CANCELLED',
+  APPOINTMENT_CHECKED_IN: 'APPOINTMENT_CHECKED_IN',
+  APPOINTMENT_NO_SHOW: 'APPOINTMENT_NO_SHOW',
+  APPOINTMENT_REMINDER: 'APPOINTMENT_REMINDER',
+  APPOINTMENT_STARTING_SOON: 'APPOINTMENT_STARTING_SOON',
+
+  PAYMENT_PENDING: 'PAYMENT_PENDING',
+  PAYMENT_SUCCESS: 'PAYMENT_SUCCESS',
+  PAYMENT_FAILED: 'PAYMENT_FAILED',
+  PAYMENT_REFUNDED: 'PAYMENT_REFUNDED',
+  PAYMENT_REFUND_PENDING: 'PAYMENT_REFUND_PENDING',
+
+  QUEUE_CHECKED_IN: 'QUEUE_CHECKED_IN',
+  PATIENT_CALLED: 'PATIENT_CALLED',
+  PATIENT_SKIPPED: 'PATIENT_SKIPPED',
+  QUEUE_DELAY_UPDATED: 'QUEUE_DELAY_UPDATED',
+  DOCTOR_DELAYED: 'DOCTOR_DELAYED',
+  DOCTOR_ON_TIME: 'DOCTOR_ON_TIME',
+  QUEUE_PAUSED: 'QUEUE_PAUSED',
+  QUEUE_RESUMED: 'QUEUE_RESUMED',
+
+  CONSULTATION_STARTED: 'CONSULTATION_STARTED',
+  CONSULTATION_COMPLETED: 'CONSULTATION_COMPLETED',
+
+  DOCTOR_STATUS_CHANGED: 'DOCTOR_STATUS_CHANGED',
+
+  CLINIC_ANNOUNCEMENT: 'CLINIC_ANNOUNCEMENT',
+
+  REVIEW_RECEIVED: 'REVIEW_RECEIVED',
+  REVIEW_RESPONSE: 'REVIEW_RESPONSE',
+
+  SECURITY_LOGIN: 'SECURITY_LOGIN',
+  SECURITY_PASSWORD_CHANGED: 'SECURITY_PASSWORD_CHANGED',
+} as const;
+export type NotificationType = (typeof NotificationType)[keyof typeof NotificationType];
+
+/** Governs whether a notification can be suppressed by user preference — TRANSACTIONAL/SECURITY
+ * always deliver both channels regardless of NotificationPreference. */
+export const NotificationTier = {
+  TRANSACTIONAL: 'TRANSACTIONAL',
+  SECURITY: 'SECURITY',
+  OPTIONAL: 'OPTIONAL',
+} as const;
+export type NotificationTier = (typeof NotificationTier)[keyof typeof NotificationTier];
+
+export const NotificationPriority = {
+  LOW: 'LOW',
+  NORMAL: 'NORMAL',
+  HIGH: 'HIGH',
+  CRITICAL: 'CRITICAL',
+} as const;
+export type NotificationPriority = (typeof NotificationPriority)[keyof typeof NotificationPriority];
+
+export const NotificationDeliveryStatus = {
+  QUEUED: 'QUEUED',
+  SENDING: 'SENDING',
+  SENT: 'SENT',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+} as const;
+export type NotificationDeliveryStatus = (typeof NotificationDeliveryStatus)[keyof typeof NotificationDeliveryStatus];
+
 /** Doctor's manually-set availability/session status for a clinic session. Staff-controlled, never inferred. */
 export const DoctorSessionStatus = {
   NOT_ARRIVED: 'NOT_ARRIVED',

@@ -6,6 +6,19 @@ import { resolveDoctorOrThrow, assertClinicMembership } from '../doctor/doctor.s
 import { ConflictError, ForbiddenError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import { prisma } from '../../config/database.js';
+
+/** Patients for every currently-WAITING (or CALLED) token in a session — the bounded audience
+ * for a queue-wide notice like a delay update or a pause/resume, never every patient ever seen
+ * by this doctor. */
+async function waitingPatientUserIds(sessionId: string): Promise<string[]> {
+  const tokens = await prisma.queueToken.findMany({
+    where: { doctorSessionId: sessionId, status: { in: ['WAITING', 'CALLED'] } },
+    select: { patient: { select: { userId: true } } },
+  });
+  return tokens.map((t) => t.patient.userId);
+}
 
 async function buildSnapshot(doctorId: string, clinicId: string, canOverrideDelay: boolean) {
   const session = await queueRepository.findSessionWithTokens(doctorId, clinicId);
@@ -67,6 +80,19 @@ export const doctorQueueEngine = {
     }
     await queueRepository.updateSession(session.id, { queueStatus: 'PAUSED', pauseReason: reason || null });
     recordAuditLog({ actorUserId, action: 'queue.session_paused', entityType: 'DoctorSession', entityId: session.id, clinicId, metadata: { doctorId, reason } });
+    const waitingIds = await waitingPatientUserIds(session.id);
+    await Promise.all(
+      waitingIds.map((userId) =>
+        notifyUser({
+          userId,
+          type: 'QUEUE_PAUSED',
+          title: 'Queue paused',
+          message: reason ? `The queue has been temporarily paused: ${reason}` : 'The queue has been temporarily paused.',
+          relatedEntityType: 'DoctorSession',
+          relatedEntityId: session.id,
+        }),
+      ),
+    );
     emitToClinicRoom(clinicId, SOCKET_EVENTS.DOCTOR.SESSION_PAUSED, { clinicId });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.QUEUE.PAUSED, { clinicId, doctorId, reason: reason || null });
     return session;
@@ -79,6 +105,19 @@ export const doctorQueueEngine = {
     }
     await queueRepository.updateSession(session.id, { queueStatus: 'ACTIVE', pauseReason: null });
     recordAuditLog({ actorUserId, action: 'queue.session_resumed', entityType: 'DoctorSession', entityId: session.id, clinicId, metadata: { doctorId } });
+    const waitingIds = await waitingPatientUserIds(session.id);
+    await Promise.all(
+      waitingIds.map((userId) =>
+        notifyUser({
+          userId,
+          type: 'QUEUE_RESUMED',
+          title: 'Queue resumed',
+          message: 'The queue is active again.',
+          relatedEntityType: 'DoctorSession',
+          relatedEntityId: session.id,
+        }),
+      ),
+    );
     emitToClinicRoom(clinicId, SOCKET_EVENTS.DOCTOR.SESSION_RESUMED, { clinicId });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.QUEUE.RESUMED, { clinicId, doctorId });
     return session;
@@ -112,6 +151,14 @@ export const doctorQueueEngine = {
       await queueRepository.updateSession(session.id, { currentTokenId: called.id });
 
       recordAuditLog({ actorUserId, action: 'queue.patient_called', entityType: 'QueueToken', entityId: called.id, clinicId, metadata: { doctorId, tokenNumber: called.tokenNumber } });
+      await notifyUser({
+        userId: called.patient.userId,
+        type: 'PATIENT_CALLED',
+        title: "It's your turn",
+        message: `You've been called — token #${called.tokenNumber}. Please proceed to the consultation room.`,
+        relatedEntityType: 'QueueToken',
+        relatedEntityId: called.id,
+      });
       emitToClinicRoom(clinicId, SOCKET_EVENTS.PATIENT.CALLED, { clinicId, token: toTokenDto(called), recalled: false });
       emitToClinicRoom(clinicId, SOCKET_EVENTS.TOKEN.CALLED, { clinicId, token: toTokenDto(called) });
       emitToClinicRoom(clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId });
@@ -148,6 +195,14 @@ export const doctorQueueEngine = {
     }
 
     recordAuditLog({ actorUserId, action: 'queue.patient_skipped', entityType: 'QueueToken', entityId: tokenId, clinicId, metadata: { doctorId, reason } });
+    await notifyUser({
+      userId: token.patient.userId,
+      type: 'PATIENT_SKIPPED',
+      title: "You've been skipped in the queue",
+      message: 'Please check in with reception to be added back to the queue.',
+      relatedEntityType: 'QueueToken',
+      relatedEntityId: tokenId,
+    });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.PATIENT.SKIPPED, { clinicId, token: toTokenDto(updated) });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.TOKEN.SKIPPED, { clinicId, token: toTokenDto(updated) });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId });
@@ -167,6 +222,29 @@ export const doctorQueueEngine = {
     });
 
     recordAuditLog({ actorUserId, action: 'queue.delay_updated', entityType: 'DoctorSession', entityId: session.id, clinicId, metadata: { doctorId, delayMinutes, delayReason } });
+
+    // Dedup rule: bucket the delay to the nearest 5 minutes and key the notification on that
+    // bucket — this is what makes "10 -> 11" a silent no-op (same bucket, notificationKey
+    // collides, idempotent) while "10 -> 20" genuinely notifies again (spec section 19: don't
+    // spam patients for every minor internal update, but do tell them about real changes).
+    const bucket = delayMinutes && delayMinutes > 0 ? Math.round(delayMinutes / 5) * 5 : 0;
+    const waitingIds = await waitingPatientUserIds(session.id);
+    await Promise.all(
+      waitingIds.map((userId) =>
+        notifyUser({
+          userId,
+          type: bucket > 0 ? 'DOCTOR_DELAYED' : 'DOCTOR_ON_TIME',
+          title: bucket > 0 ? 'Doctor running late' : 'Doctor is on time',
+          message:
+            bucket > 0
+              ? `Your doctor is running approximately ${bucket} minutes late.${delayReason ? ` Reason: ${delayReason}.` : ''}`
+              : 'Your doctor is back on schedule.',
+          relatedEntityType: 'DoctorSession',
+          relatedEntityId: session.id,
+          notificationKey: `queue:${session.id}:delay:${bucket}:${userId}`,
+        }),
+      ),
+    );
     emitToClinicRoom(clinicId, SOCKET_EVENTS.DELAY.UPDATED, { clinicId, delayMinutes, delayReason: delayReason || null });
     return updated;
   },
