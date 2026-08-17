@@ -7,6 +7,7 @@ import type { AppointmentTab } from '@clinic/shared';
 import { useAppointments } from '@/hooks/patient/use-appointments';
 import { AppointmentCard } from './appointment-card';
 import { CancelAppointmentDialog } from './cancel-appointment-dialog';
+import { RateExperienceDialog } from './rate-experience-dialog';
 import { EmptyState } from '@/components/marketing/empty-state';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -72,6 +73,16 @@ export function AppointmentList({ tab }: { tab: AppointmentTab }) {
                     trigger={
                       <Button size="sm" variant="destructive">
                         Cancel
+                      </Button>
+                    }
+                  />
+                )}
+                {tab === 'completed' && appointment.status === 'COMPLETED' && (
+                  <RateExperienceDialog
+                    appointmentId={appointment.id}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        Rate your experience
                       </Button>
                     }
                   />

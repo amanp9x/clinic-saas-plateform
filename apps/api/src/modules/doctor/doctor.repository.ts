@@ -134,11 +134,11 @@ export const doctorRepository = {
   },
 
   findReview(id: string, doctorId: string) {
-    return prisma.doctorReview.findFirst({ where: { id, doctorId } });
+    return prisma.doctorReview.findFirst({ where: { id, doctorId }, include: { patient: { select: { userId: true } } } });
   },
 
-  respondToReview(id: string, response: string) {
-    return prisma.doctorReview.update({ where: { id }, data: { response, respondedAt: new Date() } });
+  respondToReview(id: string, response: string, respondedByUserId: string) {
+    return prisma.doctorReview.update({ where: { id }, data: { response, respondedAt: new Date(), respondedByUserId } });
   },
 
   earningsAggregate(doctorId: string, from: Date, to: Date) {

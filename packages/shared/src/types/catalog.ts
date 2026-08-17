@@ -59,8 +59,20 @@ export interface DoctorReviewDto {
   id: string;
   authorName: string;
   rating: number;
-  comment: string;
+  comment: string | null;
   createdAt: string;
+  response: string | null;
+  respondedAt: string | null;
+}
+
+export interface ClinicReviewDto {
+  id: string;
+  authorName: string;
+  rating: number;
+  comment: string | null;
+  createdAt: string;
+  response: string | null;
+  respondedAt: string | null;
 }
 
 /** Aggregate-only, non-identifying live-queue summary — never contains patient names/ids/phones.
@@ -96,6 +108,8 @@ export interface ClinicSummary {
   description: string | null;
   photoUrl: string | null;
   doctorCount: number;
+  ratingAverage: number | null;
+  ratingCount: number;
 }
 
 export interface PublicClinicWorkingHoursDto {
@@ -130,6 +144,8 @@ export interface ClinicDetail extends ClinicSummary {
   holidays: PublicClinicHolidayDto[];
   services: PublicClinicServiceDto[];
   doctors: DoctorSummary[];
+  reviews: ClinicReviewDto[];
+  ratingBreakdown: RatingBreakdown;
 }
 
 export interface HospitalSummary {

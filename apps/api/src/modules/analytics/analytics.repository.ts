@@ -272,7 +272,26 @@ export const analyticsRepository = {
   },
 
   async reviewCountInRange(doctorId: string, start: Date, end: Date) {
-    return prisma.doctorReview.count({ where: { doctorId, createdAt: { gte: start, lt: end } } });
+    // PUBLISHED only (Phase 12) — kept consistent with Doctor.ratingAverage, which is likewise a
+    // published-only aggregate; an unpublished/hidden review must never inflate this count.
+    return prisma.doctorReview.count({ where: { doctorId, status: 'PUBLISHED', createdAt: { gte: start, lt: end } } });
+  },
+
+  /** Clinic-wide review summary (Phase 12 extension) — averages the clinic's own ClinicReview
+   * aggregate with the mean of its doctors' ratingAverage, both already published-only caches. */
+  async clinicReviewSummary(clinicId: string) {
+    const [clinicAgg, doctorRows] = await Promise.all([
+      prisma.clinicReview.aggregate({ where: { clinicId, status: 'PUBLISHED' }, _avg: { rating: true }, _count: true }),
+      prisma.clinicDoctor.findMany({ where: { clinicId, status: 'ACTIVE' }, select: { doctor: { select: { ratingAverage: true, ratingCount: true } } } }),
+    ]);
+    const doctorRatings = doctorRows.map((d) => d.doctor.ratingAverage).filter((r): r is number => r !== null);
+    const doctorReviewCount = doctorRows.reduce((sum, d) => sum + d.doctor.ratingCount, 0);
+    return {
+      clinicAverageRating: clinicAgg._avg.rating,
+      clinicReviewCount: clinicAgg._count,
+      doctorAverageRating: doctorRatings.length ? doctorRatings.reduce((a, b) => a + b, 0) / doctorRatings.length : null,
+      doctorReviewCount,
+    };
   },
 
   async doctorAvailabilityTemplates(clinicDoctorId: string) {

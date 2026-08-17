@@ -1,5 +1,6 @@
-import { DoctorSessionStatus, QueueStatus } from '@prisma/client';
+import { DoctorSessionStatus, NotificationType, QueueStatus } from '@prisma/client';
 import { SOCKET_EVENTS } from '@clinic/shared';
+import { notifyUser } from '../notifications/notification-dispatch.service.js';
 import type {
   ClinicAssociationUpdateInput,
   DoctorDashboardClinicStatusDto,
@@ -346,17 +347,45 @@ export const doctorService = {
     };
   },
 
+  /** Numbers shown here are always PUBLISHED-only via DB aggregation, kept consistent with the
+   * same Doctor.ratingAverage/ratingCount cache the public catalog reads (Phase 12) — a doctor's
+   * own dashboard must never show a different "average" than what patients see. `recentReviews`
+   * intentionally still includes all statuses so a doctor can see the full picture of feedback
+   * about them, each row carrying its own `status` field so the UI can label non-public ones. */
   async listReviews(userId: string): Promise<DoctorReviewSummaryDto> {
     const doctor = await resolveDoctorOrThrow(userId);
-    const reviews = await doctorRepository.listReviews(doctor.id, 20);
+    const [reviews, breakdownGroups, dimensionAgg, trendRows] = await Promise.all([
+      doctorRepository.listReviews(doctor.id, 20),
+      prisma.doctorReview.groupBy({ by: ['rating'], where: { doctorId: doctor.id, status: 'PUBLISHED' }, _count: true }),
+      prisma.doctorReview.aggregate({
+        where: { doctorId: doctor.id, status: 'PUBLISHED' },
+        _avg: { consultationExperience: true, communication: true, professionalism: true, explanationClarity: true },
+      }),
+      prisma.$queryRaw<Array<{ bucket: Date; count: bigint; avg_rating: number | null }>>`
+        SELECT date_trunc('month', "createdAt") AS bucket, COUNT(*)::bigint AS count, AVG(rating)::float AS avg_rating
+        FROM "doctor_reviews"
+        WHERE "doctorId" = ${doctor.id} AND status = 'PUBLISHED' AND "createdAt" >= NOW() - INTERVAL '6 months'
+        GROUP BY bucket
+        ORDER BY bucket ASC
+      `,
+    ]);
+
     const breakdownMap = new Map<number, number>([5, 4, 3, 2, 1].map((r) => [r, 0]));
-    for (const review of reviews) {
-      breakdownMap.set(review.rating, (breakdownMap.get(review.rating) ?? 0) + 1);
+    for (const row of breakdownGroups) {
+      breakdownMap.set(row.rating, row._count);
     }
+
     return {
       ratingAverage: doctor.ratingAverage,
       ratingCount: doctor.ratingCount,
       breakdown: [5, 4, 3, 2, 1].map((rating) => ({ rating, count: breakdownMap.get(rating) ?? 0 })),
+      dimensionAverages: {
+        consultationExperience: dimensionAgg._avg.consultationExperience,
+        communication: dimensionAgg._avg.communication,
+        professionalism: dimensionAgg._avg.professionalism,
+        explanationClarity: dimensionAgg._avg.explanationClarity,
+      },
+      trend: trendRows.map((r) => ({ bucket: r.bucket.toISOString(), count: Number(r.count), averageRating: r.avg_rating })),
       recentReviews: reviews.map(toReviewDetailDto),
     };
   },
@@ -370,8 +399,22 @@ export const doctorService = {
     if (review.response) {
       throw new ValidationError('This review already has a response');
     }
-    const updated = await doctorRepository.respondToReview(reviewId, input.response);
+    const updated = await doctorRepository.respondToReview(reviewId, input.response, userId);
     recordAuditLog({ actorUserId: userId, action: 'doctor.review_responded', entityType: 'DoctorReview', entityId: reviewId });
+    if (review.patient?.userId) {
+      await notifyUser({
+        userId: review.patient.userId,
+        type: NotificationType.REVIEW_RESPONSE,
+        title: 'You received a response to your review',
+        message: `Dr. ${doctor.displayName} responded to your review.`,
+        relatedEntityType: 'DoctorReview',
+        relatedEntityId: reviewId,
+        notificationKey: `review:${reviewId}:response`,
+      });
+    }
+    for (const cd of await prisma.clinicDoctor.findMany({ where: { doctorId: doctor.id, isActive: true }, select: { clinicId: true } })) {
+      emitToClinicRoom(cd.clinicId, SOCKET_EVENTS.REVIEW.RESPONSE_ADDED, { reviewId, type: 'DOCTOR' });
+    }
     return toReviewDetailDto(updated);
   },
 };

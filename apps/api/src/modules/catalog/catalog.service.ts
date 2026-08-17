@@ -23,6 +23,8 @@ import {
   toTestimonialDto,
 } from './catalog.mappers.js';
 import { NotFoundError } from '../../utils/app-error.js';
+import { reviewsRepository } from '../reviews/reviews.repository.js';
+import { toPublicDoctorReviewDto, toPublicClinicReviewDto } from '../reviews/reviews.mappers.js';
 
 function paginate<T>(items: T[], total: number, page: number, limit: number): PaginatedResult<T> {
   return { items, page, limit, total, totalPages: Math.max(1, Math.ceil(total / limit)) };
@@ -167,7 +169,27 @@ export const catalogService = {
     if (!clinic) {
       throw new NotFoundError('Clinic');
     }
-    return toClinicDetail(clinic);
+    const ratingGroups = await catalogRepository.groupClinicReviewRatings(clinic.id);
+    const ratingBreakdown = toRatingBreakdown(ratingGroups, clinic.ratingAverage, clinic.ratingCount);
+    return toClinicDetail(clinic, ratingBreakdown);
+  },
+
+  /** Paginated public review list — the doctor/clinic detail payloads above already embed the 20
+   * most recent PUBLISHED reviews; this exists for a "view all reviews" page that needs real
+   * pagination beyond that cap. Reuses reviewsRepository (Phase 12's own module) rather than a
+   * second query implementation. */
+  async listDoctorReviews(slug: string, page: number, limit: number) {
+    const doctor = await catalogRepository.findDoctorIdBySlug(slug);
+    if (!doctor) throw new NotFoundError('Doctor');
+    const { total, items } = await reviewsRepository.listPublicDoctorReviews(doctor.id, page, limit);
+    return paginate(items.map(toPublicDoctorReviewDto), total, page, limit);
+  },
+
+  async listClinicReviews(slug: string, page: number, limit: number) {
+    const clinic = await catalogRepository.findClinicIdBySlug(slug);
+    if (!clinic) throw new NotFoundError('Clinic');
+    const { total, items } = await reviewsRepository.listPublicClinicReviews(clinic.id, page, limit);
+    return paginate(items.map(toPublicClinicReviewDto), total, page, limit);
   },
 
   async searchHospitals(filters: HospitalSearchInput) {

@@ -24,7 +24,10 @@ const doctorDetailInclude = {
       availability: { where: { isActive: true } },
     },
   },
-  reviews: { orderBy: { createdAt: 'desc' }, take: 20 },
+  // PUBLISHED only — Phase 12 added moderation, and this is a public-facing endpoint. Legacy rows
+  // (seeded before Phase 12, no explicit status set) default to PUBLISHED via the schema default,
+  // so they keep showing up unchanged.
+  reviews: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 20 },
   leaves: { where: { endDate: { gte: startOfDay() } } },
 } satisfies Prisma.DoctorInclude;
 
@@ -164,6 +167,10 @@ export const catalogRepository = {
     return prisma.doctor.findFirst({ where: { slug, isActive: true }, select: { id: true } });
   },
 
+  findClinicIdBySlug(slug: string) {
+    return prisma.clinic.findFirst({ where: { slug, isActive: true }, select: { id: true } });
+  },
+
   findClinicDoctorLink(doctorId: string, clinicId: string) {
     return prisma.clinicDoctor.findFirst({
       where: { doctorId, clinicId, isActive: true, queueEnabled: true },
@@ -172,7 +179,11 @@ export const catalogRepository = {
   },
 
   groupDoctorReviewRatings(doctorId: string) {
-    return prisma.doctorReview.groupBy({ by: ['rating'], where: { doctorId }, _count: true });
+    return prisma.doctorReview.groupBy({ by: ['rating'], where: { doctorId, status: 'PUBLISHED' }, _count: true });
+  },
+
+  groupClinicReviewRatings(clinicId: string) {
+    return prisma.clinicReview.groupBy({ by: ['rating'], where: { clinicId, status: 'PUBLISHED' }, _count: true });
   },
 
   getCurrentTokenNumber(tokenId: string) {
@@ -308,6 +319,7 @@ export const catalogRepository = {
         workingHours: { include: { sessions: true }, orderBy: { weekday: 'asc' } },
         holidays: { where: { date: { gte: startOfDay() } }, orderBy: { date: 'asc' }, take: 10 },
         services: { where: { isActive: true }, include: { department: true } },
+        reviews: { where: { status: 'PUBLISHED' }, orderBy: { createdAt: 'desc' }, take: 20 },
         _count: { select: { doctors: { where: { isActive: true } } } },
       },
     });

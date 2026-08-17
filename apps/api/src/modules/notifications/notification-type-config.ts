@@ -65,6 +65,7 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
 
   REVIEW_RECEIVED: { tier: 'OPTIONAL', category: 'none', priority: 'LOW' },
   REVIEW_RESPONSE: { tier: 'OPTIONAL', category: 'none', priority: 'LOW' },
+  REVIEW_HIDDEN: { tier: 'OPTIONAL', category: 'none', priority: 'NORMAL' },
 
   SECURITY_LOGIN: { tier: 'SECURITY', category: 'none', priority: 'HIGH' },
   SECURITY_PASSWORD_CHANGED: { tier: 'SECURITY', category: 'none', priority: 'CRITICAL' },

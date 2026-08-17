@@ -49,6 +49,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
 
   REVIEW_RECEIVED: Megaphone,
   REVIEW_RESPONSE: Megaphone,
+  REVIEW_HIDDEN: Megaphone,
 
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,

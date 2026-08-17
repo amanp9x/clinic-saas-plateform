@@ -9,6 +9,8 @@ import { DoctorCard } from '@/components/marketing/doctor-card';
 import { BookAppointmentButton } from '@/components/marketing/book-appointment-button';
 import { FavoriteButton } from '@/components/marketing/favorite-button';
 import { EmptyState } from '@/components/marketing/empty-state';
+import { RatingStars } from '@/components/marketing/rating-stars';
+import { DoctorReviews } from '@/components/marketing/doctor-reviews';
 import { formatDate } from '@/lib/format';
 
 const WEEKDAY_LABELS: Record<string, string> = {
@@ -187,6 +189,34 @@ export default async function ClinicProfilePage({ params }: { params: Promise<Pa
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Patient reviews</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4">
+                <RatingStars rating={clinic.ratingBreakdown.average} count={clinic.ratingBreakdown.count} size="md" />
+              </div>
+              <div className="space-y-1">
+                {clinic.ratingBreakdown.distribution.map((row) => (
+                  <div key={row.rating} className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground w-10">{row.rating} star</span>
+                    <div className="bg-muted h-1.5 flex-1 overflow-hidden rounded-full">
+                      <div
+                        className="bg-amber-400 h-full"
+                        style={{
+                          width: clinic.ratingBreakdown.count > 0 ? `${(row.count / clinic.ratingBreakdown.count) * 100}%` : '0%',
+                        }}
+                      />
+                    </div>
+                    <span className="text-muted-foreground w-6 text-right">{row.count}</span>
+                  </div>
+                ))}
+              </div>
+              <DoctorReviews reviews={clinic.reviews} />
+            </CardContent>
+          </Card>
 
           <div>
             <h2 className="mb-4 text-lg font-semibold">Doctors at this clinic</h2>

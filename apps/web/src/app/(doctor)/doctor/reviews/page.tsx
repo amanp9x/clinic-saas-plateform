@@ -57,6 +57,27 @@ export default function ReviewsPage() {
             </Card>
           </div>
 
+          {Object.values(reviews.dimensionAverages).some((v) => v !== null) && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Dimension Averages</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                {[
+                  { label: 'Consultation', value: reviews.dimensionAverages.consultationExperience },
+                  { label: 'Communication', value: reviews.dimensionAverages.communication },
+                  { label: 'Professionalism', value: reviews.dimensionAverages.professionalism },
+                  { label: 'Clarity', value: reviews.dimensionAverages.explanationClarity },
+                ].map((d) => (
+                  <div key={d.label}>
+                    <p className="text-muted-foreground text-xs">{d.label}</p>
+                    <p className="text-lg font-semibold">{d.value != null ? d.value.toFixed(1) : '—'}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           <div className="space-y-3">
             <h2 className="font-heading text-lg font-semibold">Recent Reviews</h2>
             {reviews.recentReviews.length === 0 ? (

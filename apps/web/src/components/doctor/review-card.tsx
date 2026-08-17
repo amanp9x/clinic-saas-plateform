@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Star } from 'lucide-react';
 import type { DoctorReviewDetailDto } from '@clinic/shared';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { useRespondToReview } from '@/hooks/doctor/use-doctor-reviews';
@@ -37,7 +38,14 @@ export function ReviewCard({ review }: { review: DoctorReviewDetailDto }) {
     <Card>
       <CardContent className="space-y-2 py-4">
         <div className="flex items-center justify-between">
-          <p className="font-medium">{review.authorName}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{review.authorName}</p>
+            {review.status !== 'PUBLISHED' && (
+              <Badge variant="secondary" className="text-xs">
+                {review.status === 'HIDDEN' ? 'Hidden' : review.status === 'REJECTED' ? 'Rejected' : 'Pending'}
+              </Badge>
+            )}
+          </div>
           <div className="flex items-center gap-1 text-amber-500">
             {Array.from({ length: 5 }, (_, i) => (
               <Star key={i} className={`size-3.5 ${i < review.rating ? 'fill-amber-500' : ''}`} />

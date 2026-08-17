@@ -88,6 +88,12 @@ export interface AnalyticsOverviewDto {
   averageDelayMinutes: number | null;
   averageWaitingMinutes: number | null;
   queueThroughput: number;
+  reviews: {
+    clinicAverageRating: number | null;
+    clinicReviewCount: number;
+    doctorAverageRating: number | null;
+    doctorReviewCount: number;
+  };
 }
 
 export interface TrendPointDto {

@@ -1,9 +1,11 @@
-import type { DoctorReviewDto } from '@clinic/shared';
+import type { ClinicReviewDto, DoctorReviewDto } from '@clinic/shared';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { RatingStars } from './rating-stars';
 import { formatDate, initials } from '@/lib/format';
 
-export function DoctorReviews({ reviews }: { reviews: DoctorReviewDto[] }) {
+/** Shared by the public doctor and clinic detail pages — DoctorReviewDto and ClinicReviewDto are
+ * structurally identical public review shapes, so one component renders both. */
+export function DoctorReviews({ reviews }: { reviews: (DoctorReviewDto | ClinicReviewDto)[] }) {
   if (reviews.length === 0) {
     return <p className="text-muted-foreground text-sm">No reviews yet.</p>;
   }
@@ -21,7 +23,13 @@ export function DoctorReviews({ reviews }: { reviews: DoctorReviewDto[] }) {
               <span className="text-muted-foreground text-xs">{formatDate(review.createdAt)}</span>
             </div>
             <RatingStars rating={review.rating} />
-            <p className="text-muted-foreground text-sm">{review.comment}</p>
+            {review.comment && <p className="text-muted-foreground text-sm">{review.comment}</p>}
+            {review.response && (
+              <div className="bg-muted mt-2 rounded-lg p-3 text-sm">
+                <p className="font-medium">Response</p>
+                <p className="text-muted-foreground">{review.response}</p>
+              </div>
+            )}
           </div>
         </li>
       ))}

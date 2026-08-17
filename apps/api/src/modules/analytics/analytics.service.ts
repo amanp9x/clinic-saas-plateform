@@ -163,6 +163,7 @@ export const analyticsService = {
     const delay = await analyticsRepository.delayAuditStats({ clinicId, start: range.start, end: range.end });
     const overallDelay = delay.reduce((acc, d) => ({ sum: acc.sum + (d.averageDelayMinutes ?? 0) * d.delayedSessions, n: acc.n + d.delayedSessions }), { sum: 0, n: 0 });
     const queueThroughput = (await analyticsRepository.queueTokenCounts({ clinicId, start: range.start, end: range.end })).COMPLETED ?? 0;
+    const reviewSummary = await analyticsRepository.clinicReviewSummary(clinicId);
 
     return {
       clinicId,
@@ -174,6 +175,12 @@ export const analyticsService = {
       averageDelayMinutes: overallDelay.n > 0 ? roundOrNull(overallDelay.sum / overallDelay.n) : null,
       averageWaitingMinutes: roundOrNull(waiting.avg_minutes),
       queueThroughput,
+      reviews: {
+        clinicAverageRating: roundOrNull(reviewSummary.clinicAverageRating),
+        clinicReviewCount: reviewSummary.clinicReviewCount,
+        doctorAverageRating: roundOrNull(reviewSummary.doctorAverageRating),
+        doctorReviewCount: reviewSummary.doctorReviewCount,
+      },
     };
   },
 

@@ -58,6 +58,12 @@ export const CLINIC_PERMISSIONS = {
   ANALYTICS_VIEW: 'analytics.view',
   ANALYTICS_REVENUE_VIEW: 'analytics.revenue.view',
   ANALYTICS_EXPORT: 'analytics.export',
+
+  // Phase 12 — Reviews, Ratings & Feedback. One permission governs the whole "handle reviews for
+  // this clinic" surface (viewing the moderation queue, changing status, authoring the clinic's
+  // response) — same "one permission per screen/action group" convention as BILLING_VIEW. Not
+  // granted to RECEPTIONIST/CLINIC_STAFF by default; must be explicitly assigned per clinic.
+  REVIEW_MODERATE: 'review.moderate',
 } as const;
 
 export type ClinicPermission = (typeof CLINIC_PERMISSIONS)[keyof typeof CLINIC_PERMISSIONS];

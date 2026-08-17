@@ -274,7 +274,12 @@ export interface DoctorReviewDetailDto {
   id: string;
   authorName: string;
   rating: number;
-  comment: string;
+  comment: string | null;
+  consultationExperience: number | null;
+  communication: number | null;
+  professionalism: number | null;
+  explanationClarity: number | null;
+  status: string;
   createdAt: string;
   response: string | null;
   respondedAt: string | null;
@@ -285,10 +290,25 @@ export interface ReviewRatingBreakdownDto {
   count: number;
 }
 
+export interface ReviewDimensionAveragesDto {
+  consultationExperience: number | null;
+  communication: number | null;
+  professionalism: number | null;
+  explanationClarity: number | null;
+}
+
+export interface ReviewTrendPointDto {
+  bucket: string;
+  count: number;
+  averageRating: number | null;
+}
+
 export interface DoctorReviewSummaryDto {
   ratingAverage: number | null;
   ratingCount: number;
   breakdown: ReviewRatingBreakdownDto[];
+  dimensionAverages: ReviewDimensionAveragesDto;
+  trend: ReviewTrendPointDto[];
   recentReviews: DoctorReviewDetailDto[];
 }
 

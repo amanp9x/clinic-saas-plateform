@@ -74,6 +74,11 @@ export const SOCKET_EVENTS = {
   STAFF: {
     UPDATED: 'staff.updated',
   },
+  REVIEW: {
+    CREATED: 'review.created',
+    STATUS_UPDATED: 'review.status_updated',
+    RESPONSE_ADDED: 'review.response_added',
+  },
 } as const;
 
 /** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization;

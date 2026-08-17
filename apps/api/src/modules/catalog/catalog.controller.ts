@@ -40,6 +40,18 @@ export const catalogController = {
     sendSuccess(res, clinic);
   }),
 
+  listDoctorReviews: asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = req.query as never as { page: number; limit: number };
+    const result = await catalogService.listDoctorReviews(req.params.slug!, page, limit);
+    sendSuccess(res, result);
+  }),
+
+  listClinicReviews: asyncHandler(async (req: Request, res: Response) => {
+    const { page, limit } = req.query as never as { page: number; limit: number };
+    const result = await catalogService.listClinicReviews(req.params.slug!, page, limit);
+    sendSuccess(res, result);
+  }),
+
   searchHospitals: asyncHandler(async (req: Request, res: Response) => {
     const result = await catalogService.searchHospitals(req.query as never);
     sendSuccess(res, result);

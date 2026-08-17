@@ -135,6 +135,8 @@ export function toDoctorDetail(
     rating: r.rating,
     comment: r.comment,
     createdAt: r.createdAt.toISOString(),
+    response: r.response,
+    respondedAt: r.respondedAt ? r.respondedAt.toISOString() : null,
   }));
 
   return {
@@ -162,7 +164,7 @@ export function toSpecializationSummary(
 }
 
 function toClinicSummaryBase(
-  clinic: { id: string; slug: string; name: string; city: string | null; area: string | null; state: string | null; addressLine1: string | null; phone: string | null; description: string | null; photoUrl: string | null },
+  clinic: { id: string; slug: string; name: string; city: string | null; area: string | null; state: string | null; addressLine1: string | null; phone: string | null; description: string | null; photoUrl: string | null; ratingAverage: number | null; ratingCount: number },
   doctorCount: number,
 ): ClinicSummary {
   return {
@@ -177,6 +179,8 @@ function toClinicSummaryBase(
     description: clinic.description,
     photoUrl: clinic.photoUrl,
     doctorCount,
+    ratingAverage: clinic.ratingAverage,
+    ratingCount: clinic.ratingCount,
   };
 }
 
@@ -211,14 +215,17 @@ export interface ClinicWithDetailRelations {
   latitude: number | null;
   longitude: number | null;
   status: string;
+  ratingAverage: number | null;
+  ratingCount: number;
   doctors: { doctor: DoctorWithRelations }[];
   workingHours: { weekday: string; isOpen: boolean; sessions: { startTime: Date; endTime: Date }[] }[];
   holidays: ClinicHoliday[];
   services: { id: string; name: string; durationMinutes: number; price: { toString(): string }; department: { name: string } | null }[];
+  reviews: { id: string; authorName: string; rating: number; comment: string | null; createdAt: Date; response: string | null; respondedAt: Date | null }[];
   _count: { doctors: number };
 }
 
-export function toClinicDetail(clinic: ClinicWithDetailRelations): ClinicDetail {
+export function toClinicDetail(clinic: ClinicWithDetailRelations, ratingBreakdown: RatingBreakdown): ClinicDetail {
   return {
     ...toClinicSummaryBase(clinic, clinic._count.doctors),
     addressLine2: clinic.addressLine2,
@@ -243,6 +250,16 @@ export function toClinicDetail(clinic: ClinicWithDetailRelations): ClinicDetail 
       departmentName: s.department?.name ?? null,
     })) as PublicClinicServiceDto[],
     doctors: clinic.doctors.map((cd) => toDoctorSummary(cd.doctor)),
+    reviews: clinic.reviews.map((r) => ({
+      id: r.id,
+      authorName: r.authorName,
+      rating: r.rating,
+      comment: r.comment,
+      createdAt: r.createdAt.toISOString(),
+      response: r.response,
+      respondedAt: r.respondedAt ? r.respondedAt.toISOString() : null,
+    })),
+    ratingBreakdown,
   };
 }
 

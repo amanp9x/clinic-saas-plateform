@@ -8,6 +8,7 @@ import {
   hospitalSearchSchema,
   previewLimitSchema,
   specializationSlugParamSchema,
+  publicReviewsQuerySchema,
 } from '@clinic/shared';
 import { catalogController } from './catalog.controller.js';
 import { validate } from '../../middleware/validate.js';
@@ -37,6 +38,11 @@ catalogRouter.get(
   validate({ params: doctorSlugParamSchema, query: doctorQueueQuerySchema }),
   catalogController.getDoctorQueue,
 );
+catalogRouter.get(
+  '/doctors/:slug/reviews',
+  validate({ params: doctorSlugParamSchema, query: publicReviewsQuerySchema }),
+  catalogController.listDoctorReviews,
+);
 
 catalogRouter.get(
   '/clinics',
@@ -47,6 +53,11 @@ catalogRouter.get(
   '/clinics/:slug',
   validate({ params: clinicSlugParamSchema }),
   catalogController.getClinic,
+);
+catalogRouter.get(
+  '/clinics/:slug/reviews',
+  validate({ params: clinicSlugParamSchema, query: publicReviewsQuerySchema }),
+  catalogController.listClinicReviews,
 );
 catalogRouter.get(
   '/hospitals',

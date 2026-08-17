@@ -151,9 +151,21 @@ enum NotificationType {
 
   REVIEW_RECEIVED
   REVIEW_RESPONSE
+  REVIEW_HIDDEN
 
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
+}
+
+/// Review moderation lifecycle (Phase 12). New reviews default to PUBLISHED (auto-publish, per
+/// product decision — most review platforms publish immediately and moderate reactively rather
+/// than gate every submission). PENDING exists for a moderator to explicitly flag a review for
+/// further review without fully hiding/rejecting it; it is never the default entry state.
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  HIDDEN
+  REJECTED
 }
 
 /// Governs whether a notification's delivery can be suppressed by user preference.
@@ -494,6 +506,14 @@ model Clinic {
   timezone     String  @default("Asia/Kolkata")
   isActive     Boolean @default(true)
 
+  /// Denormalized aggregate over PUBLISHED ClinicReview rows only — recomputed via DB aggregation
+  /// (COUNT/AVG) whenever a review's status changes to/from PUBLISHED, never incremented ad hoc.
+  /// Phase 7 deliberately did not add this (no ClinicReview existed yet, and clinic `minRating`
+  /// filtering meant "has a doctor rated >= X" instead) — that justification no longer applies now
+  /// that real clinic reviews exist, so these mirror Doctor.ratingAverage/ratingCount exactly.
+  ratingAverage Float?
+  ratingCount   Int    @default(0)
+
   /// Profile — legal/registration
   legalName          String?
   clinicType         String?
@@ -541,6 +561,7 @@ model Clinic {
   resources        ClinicResource[]
   staffInvitations StaffInvitation[]
   settings         ClinicSettings?
+  reviews          ClinicReview[]
   favorites        Favorite[]
   slotHolds        SlotHold[]
   blockedSlots     BlockedSlot[]
@@ -681,20 +702,96 @@ model ClinicDoctor {
   @@map("clinic_doctors")
 }
 
+/// Phase 2 seeded this with only doctorId/authorName/rating/comment — Phase 12 extends it in place
+/// (per the "reuse the exact source of truth" instruction) rather than building a parallel review
+/// system. `patientId`/`appointmentId` are nullable so the original seeded testimonial-style rows
+/// (no real patient/appointment behind them) keep working unchanged; every new Phase 12 submission
+/// always sets both. `appointmentId @unique` is what makes "one review per appointment" a DB-level
+/// guarantee, not just an application check.
 model DoctorReview {
-  id          String    @id @default(uuid())
-  doctorId    String
-  authorName  String
-  rating      Int
-  comment     String
-  response    String?
-  respondedAt DateTime?
-  createdAt   DateTime  @default(now())
+  id            String    @id @default(uuid())
+  doctorId      String
+  patientId     String?
+  appointmentId String?   @unique
+  /// Snapshot of the reviewer's display name at submission time — same convention as
+  /// Appointment's fee/duration snapshots, and what already made this field privacy-safe to
+  /// expose publicly (never a live join to Patient/User).
+  authorName    String
+  rating        Int
+  comment       String?
 
-  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  /// Dimension ratings (1-5), all optional so the model stays extensible without forcing every
+  /// historical/legacy row to have them.
+  consultationExperience Int?
+  communication          Int?
+  professionalism        Int?
+  explanationClarity     Int?
+
+  status           ReviewStatus @default(PUBLISHED)
+  moderatedByUserId String?
+  moderatedAt       DateTime?
+  moderationReason  String?
+
+  response          String?
+  respondedAt       DateTime?
+  respondedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient     Patient?     @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 
   @@index([doctorId])
+  @@index([doctorId, status])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
   @@map("doctor_reviews")
+}
+
+/// Mirrors DoctorReview's shape with clinic-specific dimensions — kept as its own model rather
+/// than a polymorphic "doctorId-or-clinicId" row because the dimension sets genuinely differ
+/// (consultation/communication vs. staff/cleanliness/waiting) and there is no legacy clinic-review
+/// seed data requiring nullable patient/appointment fields the way DoctorReview has.
+model ClinicReview {
+  id            String @id @default(uuid())
+  clinicId      String
+  patientId     String
+  appointmentId String @unique
+  authorName    String
+  rating        Int
+
+  staffExperience   Int?
+  cleanliness       Int?
+  waitingExperience Int?
+  overallExperience Int?
+
+  comment String?
+
+  status           ReviewStatus @default(PUBLISHED)
+  moderatedByUserId String?
+  moderatedAt       DateTime?
+  moderationReason  String?
+
+  response          String?
+  respondedAt       DateTime?
+  respondedByUserId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clinic      Clinic      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([clinicId])
+  @@index([clinicId, status])
+  @@index([patientId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("clinic_reviews")
 }
 
 /// A patient's saved doctor or clinic (discovery/favorites). Exactly one of doctorId/clinicId is
@@ -981,6 +1078,8 @@ model Patient {
   slotHolds      SlotHold[]
   payments       Payment[]
   invoices       Invoice[]
+  doctorReviews  DoctorReview[]
+  clinicReviews  ClinicReview[]
 
   @@map("patients")
 }
@@ -1070,6 +1169,8 @@ model Appointment {
   consultation  Consultation?
   payment       Payment?
   invoice       Invoice?
+  doctorReview  DoctorReview?
+  clinicReview  ClinicReview?
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
