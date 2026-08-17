@@ -35,6 +35,7 @@ import { blockedSlotsRouter } from '../modules/blocked-slots/blocked-slots.route
 import { paymentsRouter } from '../modules/payments/payment.routes.js';
 import { paymentWebhooksRouter } from '../modules/payments/webhook.routes.js';
 import { clinicBillingRouter } from '../modules/clinic-billing/clinic-billing.routes.js';
+import { analyticsRouter } from '../modules/analytics/analytics.routes.js';
 
 export const apiRouter = Router();
 
@@ -49,6 +50,7 @@ apiRouter.use('/medical-records', medicalRecordsRouter);
 apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/notification-preferences', notificationPreferencesRouter);
 apiRouter.use('/dashboard', dashboardRouter);
+apiRouter.use('/analytics', analyticsRouter);
 
 // --- Payments & Billing (Phase 9) --------------------------------------------
 // The webhook router (unauthenticated, signature-verified) must be registered before the

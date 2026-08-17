@@ -50,6 +50,14 @@ export const CLINIC_PERMISSIONS = {
 
   // Phase 10 — Notifications & Communication.
   NOTIFICATION_ANNOUNCE: 'notification.announce',
+
+  // Phase 11 — Analytics, Reporting & Operational Insights. `ANALYTICS_VIEW` covers operational
+  // metrics (appointments/queue/doctor-ops/patients); `ANALYTICS_REVENUE_VIEW` is separate because
+  // financial data is more sensitive than operational counts; `ANALYTICS_EXPORT` is separate again
+  // since exporting (bulk row-level data leaving the dashboard) is a heavier action than viewing.
+  ANALYTICS_VIEW: 'analytics.view',
+  ANALYTICS_REVENUE_VIEW: 'analytics.revenue.view',
+  ANALYTICS_EXPORT: 'analytics.export',
 } as const;
 
 export type ClinicPermission = (typeof CLINIC_PERMISSIONS)[keyof typeof CLINIC_PERMISSIONS];

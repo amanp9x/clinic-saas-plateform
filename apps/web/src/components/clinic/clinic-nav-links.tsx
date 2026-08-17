@@ -19,6 +19,7 @@ import {
   History,
   BarChart3,
   CreditCard,
+  LineChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -37,6 +38,7 @@ export const CLINIC_NAV_LINKS = [
   { href: '/clinic/settings', label: 'Clinic Settings', icon: Settings },
   { href: '/clinic/documents', label: 'Documents', icon: FileText },
   { href: '/clinic/audit-logs', label: 'Audit Logs', icon: History },
+  { href: '/clinic/analytics', label: 'Analytics', icon: LineChart },
   { href: '/clinic/reports', label: 'Reports', icon: BarChart3 },
   { href: '/clinic/billing', label: 'Billing', icon: CreditCard },
 ];
