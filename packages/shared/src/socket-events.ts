@@ -79,6 +79,12 @@ export const SOCKET_EVENTS = {
     STATUS_UPDATED: 'review.status_updated',
     RESPONSE_ADDED: 'review.response_added',
   },
+  WAITLIST: {
+    JOINED: 'waitlist.joined',
+    SLOT_AVAILABLE: 'waitlist.slot_available',
+    CANCELLED: 'waitlist.cancelled',
+    FULFILLED: 'waitlist.fulfilled',
+  },
 } as const;
 
 /** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization;

@@ -5,6 +5,7 @@ import {
   clinicIdParamSchema,
   doctorProfileUpdateSchema,
   doctorStatusUpdateSchema,
+  doctorWaitlistQuerySchema,
   earningsQuerySchema,
   idParamSchema,
   leaveCreateSchema,
@@ -60,3 +61,5 @@ doctorRouter.post(
   validate({ params: idParamSchema, body: reviewRespondSchema }),
   doctorController.respondToReview,
 );
+
+doctorRouter.get('/waitlist', validate({ query: doctorWaitlistQuerySchema }), doctorController.listWaitlist);

@@ -102,4 +102,9 @@ export const doctorController = {
     const review = await doctorService.respondToReview(req.user!.id, req.params.id!, req.body);
     sendSuccess(res, { review }, { message: 'Response posted' });
   }),
+
+  listWaitlist: asyncHandler(async (req: Request, res: Response) => {
+    const result = await doctorService.listWaitlist(req.user!.id, req.query as never);
+    sendSuccess(res, result);
+  }),
 };

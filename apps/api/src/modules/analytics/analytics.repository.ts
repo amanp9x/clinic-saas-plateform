@@ -294,6 +294,12 @@ export const analyticsRepository = {
     };
   },
 
+  /** Phase 13 extension — a live snapshot (ACTIVE+NOTIFIED, not range-filtered), reusing
+   * WaitlistEntry as the sole source of truth rather than a duplicate reporting table. */
+  async waitlistActiveCount(clinicId: string) {
+    return prisma.waitlistEntry.count({ where: { clinicId, status: { in: ['ACTIVE', 'NOTIFIED'] } } });
+  },
+
   async doctorAvailabilityTemplates(clinicDoctorId: string) {
     return prisma.doctorAvailability.findMany({ where: { clinicDoctorId, isActive: true } });
   },

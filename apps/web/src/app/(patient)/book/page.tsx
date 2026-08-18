@@ -15,6 +15,7 @@ import {
 } from '@/hooks/patient/use-appointment-booking';
 import { DateStrip } from '@/components/booking/date-strip';
 import { SlotGrid } from '@/components/booking/slot-grid';
+import { JoinWaitlistDialog } from '@/components/patient/join-waitlist-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -203,6 +204,18 @@ function BookContent() {
                   isLoading={availability.isLoading}
                   onSelect={selectSlot}
                 />
+              )}
+              {!availability.isLoading && !availability.isError && (availability.data?.slots.length ?? 0) === 0 && !availability.data?.closedReason && (
+                <div className="mt-4 text-center">
+                  <JoinWaitlistDialog
+                    doctorId={doctorId}
+                    clinicId={clinicId}
+                    doctorName={availability.data?.doctor.displayName ?? doctorNameParam ?? 'this doctor'}
+                    targetDate={date}
+                    consultationType={consultationType}
+                    trigger={<Button type="button" variant="outline">Join waitlist for this date</Button>}
+                  />
+                </div>
               )}
             </CardContent>
           </Card>

@@ -164,6 +164,7 @@ export const analyticsService = {
     const overallDelay = delay.reduce((acc, d) => ({ sum: acc.sum + (d.averageDelayMinutes ?? 0) * d.delayedSessions, n: acc.n + d.delayedSessions }), { sum: 0, n: 0 });
     const queueThroughput = (await analyticsRepository.queueTokenCounts({ clinicId, start: range.start, end: range.end })).COMPLETED ?? 0;
     const reviewSummary = await analyticsRepository.clinicReviewSummary(clinicId);
+    const waitlistActiveCount = await analyticsRepository.waitlistActiveCount(clinicId);
 
     return {
       clinicId,
@@ -181,6 +182,7 @@ export const analyticsService = {
         doctorAverageRating: roundOrNull(reviewSummary.doctorAverageRating),
         doctorReviewCount: reviewSummary.doctorReviewCount,
       },
+      waitlist: { activeCount: waitlistActiveCount },
     };
   },
 

@@ -94,6 +94,11 @@ export interface AnalyticsOverviewDto {
     doctorAverageRating: number | null;
     doctorReviewCount: number;
   };
+  /** Phase 13 — a live snapshot (not range-filtered like the rest of this DTO), since "how many
+   * patients are currently waiting" is a point-in-time operational count, not a historical metric. */
+  waitlist: {
+    activeCount: number;
+  };
 }
 
 export interface TrendPointDto {

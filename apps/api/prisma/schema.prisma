@@ -153,6 +153,8 @@ enum NotificationType {
   REVIEW_RESPONSE
   REVIEW_HIDDEN
 
+  WAITLIST_SLOT_AVAILABLE
+
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
 }
@@ -567,6 +569,7 @@ model Clinic {
   blockedSlots     BlockedSlot[]
   payments         Payment[]
   invoices         Invoice[]
+  waitlistEntries  WaitlistEntry[]
 
   @@index([slug])
   @@index([city])
@@ -641,22 +644,23 @@ model Doctor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  specialization Specialization?  @relation(fields: [specializationId], references: [id], onDelete: SetNull)
-  clinics        ClinicDoctor[]
-  reviews        DoctorReview[]
-  appointments   Appointment[]
-  prescriptions  Prescription[]
-  sessions       DoctorSession[]
-  leaves         DoctorLeave[]
-  signature      DoctorSignature?
-  medicalRecords MedicalRecord[]
-  consultations  Consultation[]
-  favorites      Favorite[]
-  slotHolds      SlotHold[]
-  blockedSlots   BlockedSlot[]
-  payments       Payment[]
-  invoices       Invoice[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization  Specialization?  @relation(fields: [specializationId], references: [id], onDelete: SetNull)
+  clinics         ClinicDoctor[]
+  reviews         DoctorReview[]
+  appointments    Appointment[]
+  prescriptions   Prescription[]
+  sessions        DoctorSession[]
+  leaves          DoctorLeave[]
+  signature       DoctorSignature?
+  medicalRecords  MedicalRecord[]
+  consultations   Consultation[]
+  favorites       Favorite[]
+  slotHolds       SlotHold[]
+  blockedSlots    BlockedSlot[]
+  payments        Payment[]
+  invoices        Invoice[]
+  waitlistEntries WaitlistEntry[]
 
   @@index([slug])
   @@index([specializationId])
@@ -709,10 +713,10 @@ model ClinicDoctor {
 /// always sets both. `appointmentId @unique` is what makes "one review per appointment" a DB-level
 /// guarantee, not just an application check.
 model DoctorReview {
-  id            String    @id @default(uuid())
+  id            String  @id @default(uuid())
   doctorId      String
   patientId     String?
-  appointmentId String?   @unique
+  appointmentId String? @unique
   /// Snapshot of the reviewer's display name at submission time — same convention as
   /// Appointment's fee/duration snapshots, and what already made this field privacy-safe to
   /// expose publicly (never a live join to Patient/User).
@@ -727,7 +731,7 @@ model DoctorReview {
   professionalism        Int?
   explanationClarity     Int?
 
-  status           ReviewStatus @default(PUBLISHED)
+  status            ReviewStatus @default(PUBLISHED)
   moderatedByUserId String?
   moderatedAt       DateTime?
   moderationReason  String?
@@ -770,7 +774,7 @@ model ClinicReview {
 
   comment String?
 
-  status           ReviewStatus @default(PUBLISHED)
+  status            ReviewStatus @default(PUBLISHED)
   moderatedByUserId String?
   moderatedAt       DateTime?
   moderationReason  String?
@@ -1064,22 +1068,23 @@ model Patient {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  addresses      PatientAddress[]
-  appointments   Appointment[]
-  prescriptions  Prescription[]
-  labReports     LabReport[]
-  vaccinations   Vaccination[]
-  vitalRecords   VitalRecord[]
-  medicalRecords MedicalRecord[]
-  queueTokens    QueueToken[]
-  consultations  Consultation[]
-  favorites      Favorite[]
-  slotHolds      SlotHold[]
-  payments       Payment[]
-  invoices       Invoice[]
-  doctorReviews  DoctorReview[]
-  clinicReviews  ClinicReview[]
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  addresses       PatientAddress[]
+  appointments    Appointment[]
+  prescriptions   Prescription[]
+  labReports      LabReport[]
+  vaccinations    Vaccination[]
+  vitalRecords    VitalRecord[]
+  medicalRecords  MedicalRecord[]
+  queueTokens     QueueToken[]
+  consultations   Consultation[]
+  favorites       Favorite[]
+  slotHolds       SlotHold[]
+  payments        Payment[]
+  invoices        Invoice[]
+  doctorReviews   DoctorReview[]
+  clinicReviews   ClinicReview[]
+  waitlistEntries WaitlistEntry[]
 
   @@map("patients")
 }
@@ -1160,17 +1165,20 @@ model Appointment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor        Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
-  clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
-  prescriptions Prescription[]
-  labReports    LabReport[]
-  queueToken    QueueToken?
-  consultation  Consultation?
-  payment       Payment?
-  invoice       Invoice?
-  doctorReview  DoctorReview?
-  clinicReview  ClinicReview?
+  patient                Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor                 Doctor         @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic                 Clinic         @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  prescriptions          Prescription[]
+  labReports             LabReport[]
+  queueToken             QueueToken?
+  consultation           Consultation?
+  payment                Payment?
+  invoice                Invoice?
+  doctorReview           DoctorReview?
+  clinicReview           ClinicReview?
+  /// Reverse of WaitlistEntry.fulfilledAppointmentId — at most one waitlist entry can point back
+  /// to a given appointment (enforced by that field's own @unique), so this is optional, not a list.
+  fulfilledWaitlistEntry WaitlistEntry?
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -1236,6 +1244,69 @@ model BlockedSlot {
   @@index([clinicId, startAt])
   @@index([doctorId, startAt])
   @@map("blocked_slots")
+}
+
+// ---------------------------------------------------------------------------
+// Appointment Waitlist (Phase 13)
+// ---------------------------------------------------------------------------
+
+/// EXPIRED is deliberately absent — like SlotHold, it is never a stored value. A row whose
+/// `targetDate` has passed while still ACTIVE/NOTIFIED is presented as "expired" only at read
+/// time (no cron/job infra exists anywhere in this codebase, so nothing sweeps stale rows).
+enum WaitlistStatus {
+  ACTIVE
+  NOTIFIED
+  FULFILLED
+  CANCELLED
+}
+
+/// A patient's standing request to be told when a slot opens up for a specific doctor+clinic+date
+/// that currently has none suiting them. Deliberately date-level, not time-slot-level — matching
+/// "waitlist for a day", not "waitlist for exactly 10:30am". Never auto-books: when a matching
+/// slot frees up (appointment cancelled/no-showed/rescheduled away), every ACTIVE/NOTIFIED entry
+/// for that doctor+clinic+date is notified and must complete the booking themselves through the
+/// existing booking engine — whose partial unique index on `appointments` (see above) is what
+/// already guarantees at most one of several racing/notified patients can actually claim the slot,
+/// so this model needs no claim/hold mechanism of its own.
+model WaitlistEntry {
+  id               String            @id @default(uuid())
+  patientId        String
+  doctorId         String
+  clinicId         String
+  targetDate       DateTime          @db.Date
+  consultationType ConsultationType?
+  notes            String?
+  status           WaitlistStatus    @default(ACTIVE)
+
+  notifiedAt        DateTime?
+  cancelledAt       DateTime?
+  cancelledByUserId String?
+  /// The user who created this entry — the patient themselves, or a reception/clinic-staff user
+  /// adding it on their behalf. Distinct from `patientId` (who the entry is for).
+  createdByUserId   String
+
+  /// Set once a booking is made for this doctor+clinic+targetDate by the same patient, via the
+  /// normal booking engine (`book()`/`reschedule()`) — not written by any waitlist-specific code
+  /// path. `@unique` because one waitlist entry can only ever be satisfied by one appointment.
+  fulfilledAppointmentId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient              Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor               Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic               Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  fulfilledAppointment Appointment? @relation(fields: [fulfilledAppointmentId], references: [id], onDelete: SetNull)
+
+  /// The real, DB-enforced "one active/notified waitlist entry per patient+doctor+clinic+date"
+  /// guarantee is a hand-added partial unique index (see migration.sql) — Postgres partial unique
+  /// indexes aren't expressible in the Prisma schema DSL, exactly like the Appointment double-
+  /// booking guard above. `prisma migrate diff`/`db pull` will show this as permanent one-line
+  /// drift — expected, not a bug.
+  @@index([doctorId, clinicId, targetDate, status])
+  @@index([patientId, status])
+  @@index([clinicId, status])
+  @@map("waitlist_entries")
 }
 
 // ---------------------------------------------------------------------------

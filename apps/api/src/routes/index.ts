@@ -38,6 +38,8 @@ import { clinicBillingRouter } from '../modules/clinic-billing/clinic-billing.ro
 import { analyticsRouter } from '../modules/analytics/analytics.routes.js';
 import { reviewsRouter } from '../modules/reviews/reviews.routes.js';
 import { reviewModerationRouter } from '../modules/reviews/review-moderation.routes.js';
+import { waitlistRouter } from '../modules/waitlist/waitlist.routes.js';
+import { clinicWaitlistRouter } from '../modules/waitlist/clinic-waitlist.routes.js';
 
 export const apiRouter = Router();
 
@@ -54,6 +56,7 @@ apiRouter.use('/notification-preferences', notificationPreferencesRouter);
 apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/analytics', analyticsRouter);
 apiRouter.use('/reviews', reviewsRouter);
+apiRouter.use('/waitlist', waitlistRouter);
 
 // --- Payments & Billing (Phase 9) --------------------------------------------
 // The webhook router (unauthenticated, signature-verified) must be registered before the
@@ -94,4 +97,5 @@ apiRouter.use('/clinic/blocked-slots', blockedSlotsRouter);
 apiRouter.use('/clinic/billing', clinicBillingRouter);
 apiRouter.use('/clinic/announcements', clinicAnnouncementRouter);
 apiRouter.use('/clinic/reviews', reviewModerationRouter);
+apiRouter.use('/clinic/waitlist', clinicWaitlistRouter);
 apiRouter.use('/clinic', clinicRouter);

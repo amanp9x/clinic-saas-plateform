@@ -9,8 +9,11 @@ import type {
   DoctorManualStatus,
   DoctorProfileUpdateInput,
   DoctorReviewSummaryDto,
+  DoctorWaitlistQuery,
+  DoctorWaitlistRowDto,
   EarningsQuery,
   LeaveCreateInput,
+  PaginatedResult,
   ReviewRespondInput,
   ScheduleSlotCreateInput,
 } from '@clinic/shared';
@@ -25,6 +28,8 @@ import {
   toScheduleSlotDto,
   toSessionDto,
 } from './doctor.mappers.js';
+import { waitlistRepository } from '../waitlist/waitlist.repository.js';
+import { toDoctorWaitlistRowDto } from '../waitlist/waitlist.mappers.js';
 import { prisma } from '../../config/database.js';
 import { NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
@@ -416,5 +421,20 @@ export const doctorService = {
       emitToClinicRoom(cd.clinicId, SOCKET_EVENTS.REVIEW.RESPONSE_ADDED, { reviewId, type: 'DOCTOR' });
     }
     return toReviewDetailDto(updated);
+  },
+
+  /** Read-only — a doctor can see who is waiting for them but has no manage action here (that
+   * belongs to reception/clinic-admin, gated by APPOINTMENT_MANAGE). Scoped to this doctor's own
+   * `id`, resolved server-side, exactly like every other doctor-portal query. */
+  async listWaitlist(userId: string, query: DoctorWaitlistQuery): Promise<PaginatedResult<DoctorWaitlistRowDto>> {
+    const doctor = await resolveDoctorOrThrow(userId);
+    const { items, total } = await waitlistRepository.listForDoctor(doctor.id, { clinicId: query.clinicId, page: query.page, limit: query.limit });
+    return {
+      items: items.map(toDoctorWaitlistRowDto),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    };
   },
 };

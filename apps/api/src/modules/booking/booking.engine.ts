@@ -15,6 +15,7 @@ import {
 } from '../notifications/email/templates.js';
 import { isUniqueConstraintError } from '../doctor-queue/queue.repository.js';
 import { requireDoctorAtClinic } from '../reception/reception.shared.js';
+import { fulfillWaitlistIfMatched, notifyWaitlistForFreedSlot } from '../waitlist/waitlist.notify.js';
 import { timeMinutes } from '../../utils/time.util.js';
 import { generateAvailableSlots } from './booking.availability.js';
 import { bookingRepository, HOLD_MINUTES_DEFAULT, HOLD_MINUTES_INTERNAL } from './booking.repository.js';
@@ -36,6 +37,13 @@ const appointmentDetailInclude = {
 } satisfies Prisma.AppointmentInclude;
 
 export type BookingAppointment = Prisma.AppointmentGetPayload<{ include: typeof appointmentDetailInclude }>;
+
+/** The clinic-local calendar date of a scheduling timestamp, expressed as a UTC-midnight Date —
+ * matches how WaitlistEntry.targetDate (`@db.Date`) is stored, and the exact date-only expression
+ * `assertSlotStillEligible` above already uses for the same "which day is this slot on" purpose. */
+function localCalendarDateOnly(date: Date): Date {
+  return new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+}
 
 function toLocalDateString(date: Date): string {
   const y = date.getFullYear();
@@ -337,6 +345,16 @@ export const bookingEngine = {
     emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.CREATED, { appointmentId: appointment.id });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.SLOT.RELEASED, { doctorId, clinicId, scheduledAt: scheduledAt.toISOString() });
 
+    // Phase 13 — closes the loop if this booking happens to satisfy a standing waitlist request
+    // for the same patient+doctor+clinic+date. Best-effort; never affects the booking outcome.
+    await fulfillWaitlistIfMatched({
+      patientId: params.patientId,
+      doctorId,
+      clinicId,
+      targetDate: localCalendarDateOnly(scheduledAt),
+      appointmentId: appointment.id,
+    });
+
     return appointment;
   },
 
@@ -490,6 +508,22 @@ export const bookingEngine = {
     });
     emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.RESCHEDULED, { appointmentId });
 
+    // Phase 13 — the previous timestamp's slot is now free (whether or not the date actually
+    // changed, since a same-day time change still vacates a specific slot on that day); the new
+    // timestamp may in turn satisfy a standing waitlist request. Both best-effort.
+    await notifyWaitlistForFreedSlot({
+      doctorId: appointment.doctorId,
+      clinicId: appointment.clinicId,
+      targetDate: localCalendarDateOnly(previousScheduledAt),
+    });
+    await fulfillWaitlistIfMatched({
+      patientId: appointment.patientId,
+      doctorId: appointment.doctorId,
+      clinicId: appointment.clinicId,
+      targetDate: localCalendarDateOnly(newScheduledAt),
+      appointmentId,
+    });
+
     return updated;
   },
 
@@ -548,6 +582,14 @@ export const bookingEngine = {
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.CANCELLED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: 'CANCELLED' });
     emitToUserRoom(appointment.patient.user.id, SOCKET_EVENTS.APPOINTMENT.CANCELLED, { appointmentId: appointment.id });
+
+    // Phase 13 — this appointment's slot is now free; tell anyone waiting for this doctor+clinic
+    // on this date. Best-effort; never affects the cancellation outcome (already committed above).
+    await notifyWaitlistForFreedSlot({
+      doctorId: appointment.doctorId,
+      clinicId: appointment.clinicId,
+      targetDate: localCalendarDateOnly(appointment.scheduledAt),
+    });
 
     return cancelled;
   },

@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Bell,
   CalendarClock,
+  Clock,
   FileText,
   IndianRupee,
   LayoutDashboard,
@@ -26,6 +27,7 @@ export const DOCTOR_NAV_LINKS = [
   { href: '/doctor/earnings', label: 'Earnings', icon: IndianRupee },
   { href: '/doctor/analytics', label: 'Analytics', icon: LineChart },
   { href: '/doctor/reviews', label: 'Reviews', icon: Star },
+  { href: '/doctor/waitlist', label: 'Waitlist', icon: Clock },
   { href: '/doctor/notifications', label: 'Notifications', icon: Bell },
   { href: '/doctor/settings/profile', label: 'Settings', icon: Settings, matchPrefix: '/doctor/settings' },
 ];

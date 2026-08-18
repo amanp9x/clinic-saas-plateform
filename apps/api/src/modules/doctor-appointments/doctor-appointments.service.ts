@@ -11,6 +11,7 @@ import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
 import { notifyUser } from '../notifications/notification-dispatch.service.js';
+import { notifyWaitlistForFreedSlot } from '../waitlist/waitlist.notify.js';
 
 const ACTIVE_STATUSES = new Set<AppointmentStatus>([
   AppointmentStatus.CONFIRMED,
@@ -112,6 +113,16 @@ export const doctorAppointmentsEngine = {
     });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.APPOINTMENT.UPDATED, { appointmentId: appointment.id, clinicId: appointment.clinicId, status: updated.status });
     emitToClinicRoom(appointment.clinicId, SOCKET_EVENTS.QUEUE.UPDATED, { clinicId: appointment.clinicId });
+
+    // Phase 13 — a no-show frees this doctor+clinic's slot on this date, exactly like a
+    // cancellation. Best-effort; never affects the no-show outcome (already committed above).
+    const scheduledAt = appointment.scheduledAt;
+    await notifyWaitlistForFreedSlot({
+      doctorId: appointment.doctorId,
+      clinicId: appointment.clinicId,
+      targetDate: new Date(Date.UTC(scheduledAt.getFullYear(), scheduledAt.getMonth(), scheduledAt.getDate())),
+    });
+
     return toDoctorAppointmentDetail(updated);
   },
 
