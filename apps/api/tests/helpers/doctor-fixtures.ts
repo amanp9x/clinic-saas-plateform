@@ -171,3 +171,67 @@ export function createClinicWorkingHoursFixture(
     include: { sessions: true },
   });
 }
+
+/** Drives a CONFIRMED appointment through the real start -> draft -> complete consultation flow
+ * (the exact sequence `doctor-consultation.test.ts` already exercises), so Phase 14 tests get a
+ * genuinely COMPLETED appointment with real Consultation/VitalRecord/MedicalRecord side effects
+ * rather than hand-inserting rows that bypass the service layer. Returns the finalized
+ * consultation row. Pass `followUpDate` as an ISO 'YYYY-MM-DD' string for the normal write path;
+ * for tests needing exact sub-day time control (e.g. reminder-window boundaries), follow up with a
+ * direct `prisma.consultation.update(...)` after this — mirrors the existing "backdate directly in
+ * the DB for deterministic time control" idiom already used for SlotHold expiry tests. */
+export async function completeConsultationFixture(
+  app: Express,
+  input: {
+    doctorToken: string;
+    appointmentId: string;
+    diagnosis?: string;
+    doctorNotes?: string;
+    treatmentPlan?: string;
+    followUpDate?: string;
+    vitals?: { temperatureC?: number; pulseRate?: number; heightCm?: number; weightKg?: number };
+    prescriptionItems?: { medicineName: string; dosage: string; frequency: string; duration: string }[];
+  },
+) {
+  const startRes = await request(app).post(`/api/v1/doctor/appointments/${input.appointmentId}/start`).set('Authorization', `Bearer ${input.doctorToken}`);
+  if (startRes.status !== 200) {
+    throw new Error(`Consultation-start fixture failed: ${JSON.stringify(startRes.body)}`);
+  }
+
+  const draftRes = await request(app)
+    .put(`/api/v1/doctor/consultations/${input.appointmentId}`)
+    .set('Authorization', `Bearer ${input.doctorToken}`)
+    .send({
+      diagnosis: input.diagnosis ?? 'Test diagnosis',
+      doctorNotes: input.doctorNotes,
+      treatmentPlan: input.treatmentPlan,
+      vitals: input.vitals,
+      followUpDate: input.followUpDate,
+    });
+  if (draftRes.status !== 200) {
+    throw new Error(`Consultation-draft fixture failed: ${JSON.stringify(draftRes.body)}`);
+  }
+
+  if (input.prescriptionItems?.length) {
+    const patient = await prisma.appointment.findUniqueOrThrow({ where: { id: input.appointmentId }, select: { patientId: true } });
+    const rxRes = await request(app)
+      .post('/api/v1/doctor/prescriptions')
+      .set('Authorization', `Bearer ${input.doctorToken}`)
+      .send({ patientId: patient.patientId, appointmentId: input.appointmentId, items: input.prescriptionItems });
+    if (rxRes.status !== 201) {
+      throw new Error(`Prescription fixture failed: ${JSON.stringify(rxRes.body)}`);
+    }
+    const finalizeRes = await request(app)
+      .post(`/api/v1/doctor/prescriptions/${rxRes.body.data.prescription.id}/finalize`)
+      .set('Authorization', `Bearer ${input.doctorToken}`);
+    if (finalizeRes.status !== 200) {
+      throw new Error(`Prescription-finalize fixture failed: ${JSON.stringify(finalizeRes.body)}`);
+    }
+  }
+
+  const completeRes = await request(app).post(`/api/v1/doctor/consultations/${input.appointmentId}/complete`).set('Authorization', `Bearer ${input.doctorToken}`);
+  if (completeRes.status !== 200) {
+    throw new Error(`Consultation-complete fixture failed: ${JSON.stringify(completeRes.body)}`);
+  }
+  return completeRes.body.data.consultation as { id: string; appointmentId: string; followUpDate: string | null };
+}

@@ -42,7 +42,9 @@ function BookContent() {
   const clinicId = searchParams.get('clinicId') ?? undefined;
   const doctorNameParam = searchParams.get('doctorName') ?? undefined;
 
-  const [date, setDate] = useState(todayIso());
+  const requestedDate = searchParams.get('date');
+  const initialDate = requestedDate && requestedDate >= todayIso() ? requestedDate : todayIso();
+  const [date, setDate] = useState(initialDate);
   const [consultationType, setConsultationType] = useState<ConsultationType>('IN_CLINIC');
   const [appointmentType, setAppointmentType] = useState<AppointmentType>('NEW_CONSULTATION');
   const [reasonForVisit, setReasonForVisit] = useState('');

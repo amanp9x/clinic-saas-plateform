@@ -99,6 +99,11 @@ export interface AnalyticsOverviewDto {
   waitlist: {
     activeCount: number;
   };
+  /** Phase 14 — count of consultations completed in this range that recommended a follow-up
+   * (`Consultation.followUpDate` set). Range-filtered like the rest of this DTO, unlike `waitlist`. */
+  followUps: {
+    totalDue: number;
+  };
 }
 
 export interface TrendPointDto {

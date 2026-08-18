@@ -72,6 +72,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // PAYMENT_FAILED — never something a patient would want silently dropped by a preference toggle.
   WAITLIST_SLOT_AVAILABLE: { tier: 'TRANSACTIONAL', category: 'appointment', priority: 'HIGH' },
 
+  // Phase 14 — Follow-Up Care. OPTIONAL (suppressible via the existing appointment-category
+  // preference toggle), matching APPOINTMENT_REMINDER's tier exactly — this is a helpful nudge,
+  // not a transactional record of something that already happened.
+  FOLLOW_UP_DUE: { tier: 'OPTIONAL', category: 'appointment', priority: 'NORMAL', defaultExpiryMinutes: 60 * 24 * 14 },
+
   SECURITY_LOGIN: { tier: 'SECURITY', category: 'none', priority: 'HIGH' },
   SECURITY_PASSWORD_CHANGED: { tier: 'SECURITY', category: 'none', priority: 'CRITICAL' },
 };

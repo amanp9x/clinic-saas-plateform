@@ -24,6 +24,11 @@ export const appointmentsController = {
     sendSuccess(res, { queue });
   }),
 
+  getVisitSummary: asyncHandler(async (req: Request, res: Response) => {
+    const summary = await appointmentsService.getVisitSummary(req.user!.id, req.params.id!);
+    sendSuccess(res, { summary });
+  }),
+
   getAvailability: asyncHandler(async (req: Request, res: Response) => {
     const result = await appointmentsService.getAvailability(req.query as never);
     sendSuccess(res, result);

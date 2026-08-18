@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { CalendarClock, Clock, LayoutDashboard, Radio, Search, UserPlus, BarChart3 } from 'lucide-react';
+import { CalendarClock, ClipboardList, Clock, LayoutDashboard, Radio, Search, UserPlus, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const RECEPTION_NAV_LINKS = [
@@ -11,6 +11,7 @@ export const RECEPTION_NAV_LINKS = [
   { href: '/reception/queue', label: 'Live Queue', icon: Radio },
   { href: '/reception/walkin', label: 'Walk-in', icon: UserPlus },
   { href: '/reception/waitlist', label: 'Waitlist', icon: Clock },
+  { href: '/reception/follow-ups', label: 'Follow-ups', icon: ClipboardList },
   { href: '/reception/patients', label: 'Patient Search', icon: Search },
   { href: '/reception/reports', label: 'Reports', icon: BarChart3 },
 ];

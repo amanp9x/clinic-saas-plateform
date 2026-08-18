@@ -300,6 +300,14 @@ export const analyticsRepository = {
     return prisma.waitlistEntry.count({ where: { clinicId, status: { in: ['ACTIVE', 'NOTIFIED'] } } });
   },
 
+  /** Phase 14 extension — consultations completed in this range that recommended a follow-up,
+   * reusing Consultation.followUpDate as the sole source of truth (no duplicate reporting table). */
+  async followUpsDueCount({ clinicId, start, end, doctorId }: RangeFilter) {
+    return prisma.consultation.count({
+      where: { clinicId, doctorId, completedAt: { gte: start, lt: end }, followUpDate: { not: null } },
+    });
+  },
+
   async doctorAvailabilityTemplates(clinicDoctorId: string) {
     return prisma.doctorAvailability.findMany({ where: { clinicDoctorId, isActive: true } });
   },

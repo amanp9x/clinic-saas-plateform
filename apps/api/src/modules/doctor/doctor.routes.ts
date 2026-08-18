@@ -3,6 +3,7 @@ import { UserRole } from '@clinic/shared';
 import {
   clinicAssociationUpdateSchema,
   clinicIdParamSchema,
+  doctorFollowUpsQuerySchema,
   doctorProfileUpdateSchema,
   doctorStatusUpdateSchema,
   doctorWaitlistQuerySchema,
@@ -63,3 +64,5 @@ doctorRouter.post(
 );
 
 doctorRouter.get('/waitlist', validate({ query: doctorWaitlistQuerySchema }), doctorController.listWaitlist);
+
+doctorRouter.get('/follow-ups', validate({ query: doctorFollowUpsQuerySchema }), doctorController.listFollowUps);

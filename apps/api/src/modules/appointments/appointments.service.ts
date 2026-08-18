@@ -10,8 +10,11 @@ import type {
   RescheduleAppointmentInput,
 } from '@clinic/shared';
 import type { AppointmentDetailDto, AppointmentSummaryDto, AvailabilityResultDto, BookingConfirmationDto, SlotHoldDto } from '@clinic/shared';
+import type { VisitSummaryDto } from '@clinic/shared';
 import { appointmentsRepository } from './appointments.repository.js';
-import { toAppointmentDetail, toAppointmentSummary } from './appointments.mappers.js';
+import { toAppointmentDetail, toAppointmentSummary, toVisitSummaryDto } from './appointments.mappers.js';
+import { followUpRepository } from '../follow-up/follow-up.repository.js';
+import { toVisitPrescriptionDto } from '../follow-up/follow-up.mappers.js';
 import { patientRepository } from '../patient/patient.repository.js';
 import { queueRepository } from '../doctor-queue/queue.repository.js';
 import { calculateEta } from '../queue-engine/eta.service.js';
@@ -50,6 +53,30 @@ export const appointmentsService = {
       throw new NotFoundError('Appointment');
     }
     return toAppointmentDetail(appointment);
+  },
+
+  /** Phase 14 — joins this appointment's Consultation (vitals/diagnosis/notes/follow-up) and any
+   * linked Prescription into one read, reusing existing data with no duplication. Only meaningful
+   * once the visit is COMPLETED, mirroring `getQueueView`'s "not active" guard for the inverse case. */
+  async getVisitSummary(userId: string, appointmentId: string): Promise<VisitSummaryDto> {
+    const patient = await patientRepository.findByUserId(userId);
+    if (!patient) {
+      throw new NotFoundError('Patient profile');
+    }
+    const appointment = await appointmentsRepository.findById(appointmentId, patient.id);
+    if (!appointment) {
+      throw new NotFoundError('Appointment');
+    }
+    if (appointment.status !== AppointmentStatus.COMPLETED) {
+      throw new ConflictError('This visit does not have a summary yet');
+    }
+
+    const [consultation, prescription] = await Promise.all([
+      followUpRepository.findConsultationForAppointment(appointmentId),
+      followUpRepository.findPrescriptionForAppointment(appointmentId),
+    ]);
+
+    return toVisitSummaryDto(appointment, consultation, prescription ? toVisitPrescriptionDto(prescription, patient.fullName) : null);
   },
 
   async cancel(userId: string, appointmentId: string, input: CancelAppointmentInput): Promise<AppointmentDetailDto> {

@@ -4,11 +4,12 @@ import { use } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowLeft, CalendarClock, CreditCard, MapPin, Phone, Receipt } from 'lucide-react';
-import { useAppointment } from '@/hooks/patient/use-appointments';
+import { useAppointment, useVisitSummary } from '@/hooks/patient/use-appointments';
 import { downloadReceipt } from '@/hooks/patient/use-payments';
 import { AppointmentStatusBadge } from '@/components/patient/appointment-status-badge';
 import { CancelAppointmentDialog } from '@/components/patient/cancel-appointment-dialog';
 import { RescheduleAppointmentDialog } from '@/components/patient/reschedule-appointment-dialog';
+import { VisitSummaryCard } from '@/components/patient/visit-summary-card';
 import { EmptyState } from '@/components/marketing/empty-state';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +24,8 @@ const CANCELLABLE_STATUSES = new Set(['PENDING', 'CONFIRMED']);
 export default function AppointmentDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: appointment, isLoading } = useAppointment(id);
+  const isCompleted = appointment?.status === 'COMPLETED';
+  const { data: visitSummary, isLoading: isSummaryLoading } = useVisitSummary(id, isCompleted);
 
   if (isLoading) {
     return (
@@ -201,6 +204,8 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
           </div>
         </CardContent>
       </Card>
+
+      {isCompleted && <VisitSummaryCard summary={visitSummary} isLoading={isSummaryLoading} />}
     </div>
   );
 }

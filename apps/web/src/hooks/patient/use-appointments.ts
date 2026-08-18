@@ -8,6 +8,7 @@ import type {
   CancelAppointmentInput,
   PaginatedResult,
   QueueViewDto,
+  VisitSummaryDto,
 } from '@clinic/shared';
 import { apiFetch } from '@/lib/api-client';
 
@@ -45,6 +46,15 @@ export function useCancelAppointment() {
       queryClient.invalidateQueries({ queryKey: ['patient', 'dashboard-summary'] });
       queryClient.invalidateQueries({ queryKey: ['patient', 'notifications'] });
     },
+  });
+}
+
+export function useVisitSummary(appointmentId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: [...APPOINTMENTS_KEY, appointmentId, 'visit-summary'],
+    queryFn: () => apiFetch<{ summary: VisitSummaryDto }>(`/api/v1/appointments/${appointmentId}/visit-summary`),
+    select: (data) => data.summary,
+    enabled: Boolean(appointmentId) && enabled,
   });
 }
 

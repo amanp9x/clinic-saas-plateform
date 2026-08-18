@@ -41,6 +41,10 @@ function formatDateTime(date: Date): string {
   return date.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+function formatDateOnly(date: Date): string {
+  return date.toLocaleDateString('en-IN', { dateStyle: 'medium' });
+}
+
 export interface AppointmentEmailContext {
   clinicName: string;
   doctorName: string;
@@ -109,6 +113,28 @@ export function appointmentReminderEmail(ctx: AppointmentEmailContext & { timing
     actionUrl: ctx.actionUrl,
   });
   return { subject: `Reminder: appointment ${ctx.timingLabel}`, html, text };
+}
+
+export interface FollowUpDueEmailContext {
+  clinicName: string;
+  patientName: string;
+  doctorName: string;
+  followUpDate: Date;
+  actionUrl: string;
+}
+
+export function followUpDueEmail(ctx: FollowUpDueEmailContext): RenderedEmail {
+  const { html, text } = renderShell({
+    clinicName: ctx.clinicName,
+    heading: 'Follow-up recommended',
+    lines: [
+      `Hi ${ctx.patientName}, ${ctx.doctorName} recommended a follow-up visit around ${formatDateOnly(ctx.followUpDate)}.`,
+      `You can book a slot whenever suits you — sooner is better if you're still experiencing symptoms.`,
+    ],
+    actionLabel: 'Book follow-up',
+    actionUrl: ctx.actionUrl,
+  });
+  return { subject: 'Follow-up visit recommended', html, text };
 }
 
 export interface PaymentEmailContext {

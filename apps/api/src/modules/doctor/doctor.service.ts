@@ -6,12 +6,14 @@ import type {
   DoctorDashboardClinicStatusDto,
   DoctorDashboardSummaryDto,
   DoctorEarningsSummaryDto,
+  DoctorFollowUpsQuery,
   DoctorManualStatus,
   DoctorProfileUpdateInput,
   DoctorReviewSummaryDto,
   DoctorWaitlistQuery,
   DoctorWaitlistRowDto,
   EarningsQuery,
+  FollowUpRowDto,
   LeaveCreateInput,
   PaginatedResult,
   ReviewRespondInput,
@@ -30,6 +32,8 @@ import {
 } from './doctor.mappers.js';
 import { waitlistRepository } from '../waitlist/waitlist.repository.js';
 import { toDoctorWaitlistRowDto } from '../waitlist/waitlist.mappers.js';
+import { followUpRepository } from '../follow-up/follow-up.repository.js';
+import { toFollowUpRowDto } from '../follow-up/follow-up.mappers.js';
 import { prisma } from '../../config/database.js';
 import { NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
@@ -431,6 +435,20 @@ export const doctorService = {
     const { items, total } = await waitlistRepository.listForDoctor(doctor.id, { clinicId: query.clinicId, page: query.page, limit: query.limit });
     return {
       items: items.map(toDoctorWaitlistRowDto),
+      page: query.page,
+      limit: query.limit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / query.limit)),
+    };
+  },
+
+  /** Read-only, same shape as `listWaitlist` — reception/clinic-admin get the equivalent
+   * clinic-scoped view via the `follow-up` module's own routes. */
+  async listFollowUps(userId: string, query: DoctorFollowUpsQuery): Promise<PaginatedResult<FollowUpRowDto>> {
+    const doctor = await resolveDoctorOrThrow(userId);
+    const { items, total } = await followUpRepository.listDueForDoctor(doctor.id, { clinicId: query.clinicId, page: query.page, limit: query.limit });
+    return {
+      items: items.map((row) => toFollowUpRowDto(row)),
       page: query.page,
       limit: query.limit,
       total,

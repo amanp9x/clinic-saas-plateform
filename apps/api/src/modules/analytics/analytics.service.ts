@@ -165,6 +165,7 @@ export const analyticsService = {
     const queueThroughput = (await analyticsRepository.queueTokenCounts({ clinicId, start: range.start, end: range.end })).COMPLETED ?? 0;
     const reviewSummary = await analyticsRepository.clinicReviewSummary(clinicId);
     const waitlistActiveCount = await analyticsRepository.waitlistActiveCount(clinicId);
+    const followUpsDueCount = await analyticsRepository.followUpsDueCount({ clinicId, start: range.start, end: range.end });
 
     return {
       clinicId,
@@ -183,6 +184,7 @@ export const analyticsService = {
         doctorReviewCount: reviewSummary.doctorReviewCount,
       },
       waitlist: { activeCount: waitlistActiveCount },
+      followUps: { totalDue: followUpsDueCount },
     };
   },
 

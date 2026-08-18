@@ -32,6 +32,7 @@ appointmentsRouter.delete('/hold/:id', validate({ params: holdParamSchema }), ap
 appointmentsRouter.post('/', validate({ body: createAppointmentSchema }), appointmentsController.create);
 appointmentsRouter.get('/:id', appointmentsController.getById);
 appointmentsRouter.get('/:id/queue', appointmentsController.getQueueView);
+appointmentsRouter.get('/:id/visit-summary', appointmentsController.getVisitSummary);
 appointmentsRouter.patch(
   '/:id/reschedule',
   validate({ body: rescheduleAppointmentSchema }),

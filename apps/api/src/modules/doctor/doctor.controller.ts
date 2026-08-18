@@ -107,4 +107,9 @@ export const doctorController = {
     const result = await doctorService.listWaitlist(req.user!.id, req.query as never);
     sendSuccess(res, result);
   }),
+
+  listFollowUps: asyncHandler(async (req: Request, res: Response) => {
+    const result = await doctorService.listFollowUps(req.user!.id, req.query as never);
+    sendSuccess(res, result);
+  }),
 };

@@ -40,6 +40,7 @@ import { reviewsRouter } from '../modules/reviews/reviews.routes.js';
 import { reviewModerationRouter } from '../modules/reviews/review-moderation.routes.js';
 import { waitlistRouter } from '../modules/waitlist/waitlist.routes.js';
 import { clinicWaitlistRouter } from '../modules/waitlist/clinic-waitlist.routes.js';
+import { clinicFollowUpsRouter } from '../modules/follow-up/clinic-follow-ups.routes.js';
 
 export const apiRouter = Router();
 
@@ -98,4 +99,5 @@ apiRouter.use('/clinic/billing', clinicBillingRouter);
 apiRouter.use('/clinic/announcements', clinicAnnouncementRouter);
 apiRouter.use('/clinic/reviews', reviewModerationRouter);
 apiRouter.use('/clinic/waitlist', clinicWaitlistRouter);
+apiRouter.use('/clinic/follow-ups', clinicFollowUpsRouter);
 apiRouter.use('/clinic', clinicRouter);

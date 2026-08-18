@@ -1,4 +1,6 @@
-import type { AppointmentDetailDto, AppointmentSummaryDto } from '@clinic/shared';
+import type { AppointmentDetailDto, AppointmentSummaryDto, DoctorPrescriptionDto, VisitSummaryDto } from '@clinic/shared';
+import type { Consultation } from '@prisma/client';
+import { toConsultationDto } from '../doctor-consultation/consultation.mappers.js';
 import type { AppointmentWithRelations } from './appointments.repository.js';
 
 export function toAppointmentSummary(appointment: AppointmentWithRelations): AppointmentSummaryDto {
@@ -24,6 +26,24 @@ export function toAppointmentSummary(appointment: AppointmentWithRelations): App
     hasPrescription: appointment.prescriptions.length > 0,
     paymentStatus: appointment.payment?.status ?? null,
     paymentId: appointment.payment?.id ?? null,
+  };
+}
+
+export function toVisitSummaryDto(
+  appointment: AppointmentWithRelations,
+  consultation: Consultation | null,
+  prescription: DoctorPrescriptionDto | null,
+): VisitSummaryDto {
+  return {
+    appointmentId: appointment.id,
+    doctorId: appointment.doctorId,
+    doctorName: appointment.doctor.displayName,
+    doctorSlug: appointment.doctor.slug,
+    clinicId: appointment.clinicId,
+    clinicName: appointment.clinic.name,
+    scheduledAt: appointment.scheduledAt.toISOString(),
+    consultation: consultation ? toConsultationDto(consultation) : null,
+    prescription,
   };
 }
 

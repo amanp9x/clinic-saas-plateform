@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Bell,
   CalendarClock,
+  ClipboardList,
   Clock,
   FileText,
   IndianRupee,
@@ -28,6 +29,7 @@ export const DOCTOR_NAV_LINKS = [
   { href: '/doctor/analytics', label: 'Analytics', icon: LineChart },
   { href: '/doctor/reviews', label: 'Reviews', icon: Star },
   { href: '/doctor/waitlist', label: 'Waitlist', icon: Clock },
+  { href: '/doctor/follow-ups', label: 'Follow-ups', icon: ClipboardList },
   { href: '/doctor/notifications', label: 'Notifications', icon: Bell },
   { href: '/doctor/settings/profile', label: 'Settings', icon: Settings, matchPrefix: '/doctor/settings' },
 ];
