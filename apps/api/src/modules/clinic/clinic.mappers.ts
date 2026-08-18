@@ -37,6 +37,8 @@ export function toClinicProfileDto(clinic: Clinic): ClinicProfileDto {
     verificationStatus: clinic.verificationStatus,
     verificationSubmittedAt: clinic.verificationSubmittedAt ? clinic.verificationSubmittedAt.toISOString() : null,
     verificationNotes: clinic.verificationNotes,
+    verificationReviewedAt: clinic.verificationReviewedAt ? clinic.verificationReviewedAt.toISOString() : null,
+    verificationReviewNotes: clinic.verificationReviewNotes,
     isActive: clinic.isActive,
     createdAt: clinic.createdAt.toISOString(),
   };

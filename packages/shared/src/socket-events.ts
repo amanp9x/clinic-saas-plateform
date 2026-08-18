@@ -67,6 +67,7 @@ export const SOCKET_EVENTS = {
     STATUS_UPDATED: 'clinic.status.updated',
     SCHEDULE_UPDATED: 'clinic.schedule.updated',
     QUEUE_SETTINGS_UPDATED: 'queue.settings.updated',
+    VERIFICATION_UPDATED: 'clinic.verification.updated',
   },
   DOCTOR_ASSOCIATION: {
     UPDATED: 'doctor.association.updated',

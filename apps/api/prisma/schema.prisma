@@ -157,6 +157,8 @@ enum NotificationType {
 
   FOLLOW_UP_DUE
 
+  CLINIC_VERIFICATION_UPDATED
+
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
 }
@@ -542,10 +544,16 @@ model Clinic {
   statusReason    String?
   statusUpdatedAt DateTime?
 
-  /// Verification — clinic-side state only, no Super Admin review workflow in this phase.
-  verificationStatus      ClinicVerificationStatus @default(PENDING)
-  verificationSubmittedAt DateTime?
-  verificationNotes       String?
+  /// Verification — clinic-side submission plus the Phase 15 Platform Admin review workflow.
+  /// `verificationNotes` remains the clinic's own submission notes (set by the clinic); the three
+  /// `verificationReview*` fields below are the reviewer's side, kept separate so an admin's
+  /// decision never overwrites the applicant's original context.
+  verificationStatus           ClinicVerificationStatus @default(PENDING)
+  verificationSubmittedAt      DateTime?
+  verificationNotes            String?
+  verificationReviewedAt       DateTime?
+  verificationReviewedByUserId String?
+  verificationReviewNotes      String?
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt

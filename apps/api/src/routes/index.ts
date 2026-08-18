@@ -41,6 +41,7 @@ import { reviewModerationRouter } from '../modules/reviews/review-moderation.rou
 import { waitlistRouter } from '../modules/waitlist/waitlist.routes.js';
 import { clinicWaitlistRouter } from '../modules/waitlist/clinic-waitlist.routes.js';
 import { clinicFollowUpsRouter } from '../modules/follow-up/clinic-follow-ups.routes.js';
+import { platformAdminRouter } from '../modules/platform-admin/platform-admin.routes.js';
 
 export const apiRouter = Router();
 
@@ -100,4 +101,5 @@ apiRouter.use('/clinic/announcements', clinicAnnouncementRouter);
 apiRouter.use('/clinic/reviews', reviewModerationRouter);
 apiRouter.use('/clinic/waitlist', clinicWaitlistRouter);
 apiRouter.use('/clinic/follow-ups', clinicFollowUpsRouter);
+apiRouter.use('/platform-admin', platformAdminRouter);
 apiRouter.use('/clinic', clinicRouter);

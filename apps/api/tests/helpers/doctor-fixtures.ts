@@ -12,6 +12,27 @@ import { weekdayForDate } from '../../src/utils/weekday.js';
 
 export const FRESH_DOCTOR_PASSWORD = 'FreshDoc123!';
 export const FRESH_PATIENT_PASSWORD = 'FreshPat123!';
+export const FRESH_PLATFORM_ADMIN_PASSWORD = 'FreshPlatform123!';
+
+/** A bare platform-level account — no Doctor/Patient/ClinicStaffMember profile, since
+ * SUPER_ADMIN/PLATFORM_ADMIN operate across every clinic by definition rather than being scoped
+ * to one via a staff membership row. */
+export async function createPlatformAdminFixture(app: Express, role: typeof UserRole.SUPER_ADMIN | typeof UserRole.PLATFORM_ADMIN = UserRole.SUPER_ADMIN) {
+  const suffix = randomUUID().slice(0, 8);
+  const passwordHash = await hashPassword(FRESH_PLATFORM_ADMIN_PASSWORD);
+  const email = `platform-admin-fixture-${suffix}@example.com`;
+
+  const user = await prisma.user.create({
+    data: { email, passwordHash, role, isEmailVerified: true, isActive: true },
+  });
+
+  const loginRes = await request(app).post('/api/v1/auth/login').send({ email, password: FRESH_PLATFORM_ADMIN_PASSWORD });
+  if (loginRes.status !== 200) {
+    throw new Error(`Platform admin fixture login failed: ${JSON.stringify(loginRes.body)}`);
+  }
+
+  return { token: loginRes.body.data.accessToken as string, userId: user.id, role };
+}
 
 /**
  * Creates a fully isolated Doctor + Clinic + ClinicDoctor fixture with a unique email/slug per

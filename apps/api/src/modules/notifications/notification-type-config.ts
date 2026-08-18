@@ -77,6 +77,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // not a transactional record of something that already happened.
   FOLLOW_UP_DUE: { tier: 'OPTIONAL', category: 'appointment', priority: 'NORMAL', defaultExpiryMinutes: 60 * 24 * 14 },
 
+  // Phase 15 — Platform Admin. TRANSACTIONAL: a clinic's ability to operate/appear in the catalog
+  // hinges on this, so it must never be suppressible via a preference toggle — same reasoning as
+  // PAYMENT_FAILED and WAITLIST_SLOT_AVAILABLE.
+  CLINIC_VERIFICATION_UPDATED: { tier: 'TRANSACTIONAL', category: 'none', priority: 'HIGH' },
+
   SECURITY_LOGIN: { tier: 'SECURITY', category: 'none', priority: 'HIGH' },
   SECURITY_PASSWORD_CHANGED: { tier: 'SECURITY', category: 'none', priority: 'CRITICAL' },
 };

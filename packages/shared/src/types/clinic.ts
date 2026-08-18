@@ -51,6 +51,9 @@ export interface ClinicProfileDto {
   verificationStatus: ClinicVerificationStatus;
   verificationSubmittedAt: string | null;
   verificationNotes: string | null;
+  /** Phase 15 — set once a Platform Admin has reviewed this clinic's verification submission. */
+  verificationReviewedAt: string | null;
+  verificationReviewNotes: string | null;
   isActive: boolean;
   createdAt: string;
 }

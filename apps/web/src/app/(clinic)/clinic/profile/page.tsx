@@ -169,6 +169,14 @@ function ClinicProfileForm({ clinicId, clinic }: { clinicId: string; clinic: Cli
             </Button>
           ) : null}
         </CardContent>
+        {(clinic.verificationStatus === 'REJECTED' || clinic.verificationStatus === 'SUSPENDED') && clinic.verificationReviewNotes && (
+          <CardContent className="border-t pt-4">
+            <p className="text-destructive text-sm font-medium">
+              {clinic.verificationStatus === 'REJECTED' ? 'Verification rejected' : 'Verification suspended'}
+            </p>
+            <p className="text-muted-foreground text-sm">{clinic.verificationReviewNotes}</p>
+          </CardContent>
+        )}
       </Card>
 
       <Card>

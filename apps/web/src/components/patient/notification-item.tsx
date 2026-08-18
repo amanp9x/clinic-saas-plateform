@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bell, CalendarClock, ClipboardList, Clock, CreditCard, FlaskConical, Megaphone, Pill, Radio, ShieldAlert, Stethoscope } from 'lucide-react';
+import { Bell, CalendarClock, ClipboardList, Clock, CreditCard, FlaskConical, Megaphone, Pill, Radio, ShieldAlert, ShieldCheck, Stethoscope } from 'lucide-react';
 import type { NotificationDto, NotificationType } from '@clinic/shared';
 import { useMarkNotificationRead } from '@/hooks/patient/use-notifications';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +54,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   WAITLIST_SLOT_AVAILABLE: Clock,
 
   FOLLOW_UP_DUE: ClipboardList,
+
+  CLINIC_VERIFICATION_UPDATED: ShieldCheck,
 
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,
