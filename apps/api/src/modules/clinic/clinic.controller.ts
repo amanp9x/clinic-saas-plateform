@@ -42,7 +42,7 @@ export const clinicController = {
 
   uploadDocument: asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) throw new ValidationError('A file is required');
-    const document = await clinicService.uploadDocument(req.user!.id, req.user!.role, req.body.clinicId, req.body.type, req.file);
+    const document = await clinicService.uploadDocument(req.user!.id, req.user!.role, req.body.clinicId, req.body.type, req.body.expiryDate || undefined, req.file);
     sendSuccess(res, { document }, { status: 201, message: 'Document uploaded' });
   }),
 
@@ -66,6 +66,11 @@ export const clinicController = {
   deleteDocument: asyncHandler(async (req: Request, res: Response) => {
     await clinicService.deleteDocument(req.user!.id, req.user!.role, req.query.clinicId as string, req.params.id as string);
     sendSuccess(res, null, { message: 'Document deleted' });
+  }),
+
+  updateDocumentExpiry: asyncHandler(async (req: Request, res: Response) => {
+    const document = await clinicService.updateDocumentExpiry(req.user!.id, req.user!.role, req.body.clinicId, req.params.id as string, req.body.expiryDate);
+    sendSuccess(res, { document }, { message: 'Document expiry updated' });
   }),
 
   getDashboard: asyncHandler(async (req: Request, res: Response) => {

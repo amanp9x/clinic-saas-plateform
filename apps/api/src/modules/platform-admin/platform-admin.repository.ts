@@ -1,5 +1,6 @@
 import type { ClinicDocumentStatus, ClinicVerificationStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/database.js';
+import { EXPIRING_SOON_WINDOW_DAYS } from '../../utils/document-expiry.util.js';
 
 const rowInclude = {
   _count: { select: { doctors: true } },
@@ -12,15 +13,50 @@ const detailInclude = {
 export type PlatformClinicRowWithRelations = Prisma.ClinicGetPayload<{ include: typeof rowInclude }>;
 export type PlatformClinicDetailWithRelations = Prisma.ClinicGetPayload<{ include: typeof detailInclude }>;
 
+const complianceRowInclude = {
+  clinic: { select: { name: true } },
+} satisfies Prisma.ClinicDocumentInclude;
+
+export type ComplianceDocumentRowWithRelations = Prisma.ClinicDocumentGetPayload<{ include: typeof complianceRowInclude }>;
+
 export const platformAdminRepository = {
   async overview() {
-    const [totalClinics, verificationGroups, totalDoctors, totalPatients] = await Promise.all([
+    const now = new Date();
+    const expiringSoonWindowEnd = new Date(now.getTime() + EXPIRING_SOON_WINDOW_DAYS * 24 * 60 * 60_000);
+    const [totalClinics, verificationGroups, totalDoctors, totalPatients, expiringDocumentsCount, expiredDocumentsCount] = await Promise.all([
       prisma.clinic.count(),
       prisma.clinic.groupBy({ by: ['verificationStatus'], _count: true }),
       prisma.doctor.count(),
       prisma.patient.count(),
+      prisma.clinicDocument.count({ where: { expiryDate: { gte: now, lte: expiringSoonWindowEnd } } }),
+      prisma.clinicDocument.count({ where: { expiryDate: { lt: now } } }),
     ]);
-    return { totalClinics, verificationGroups, totalDoctors, totalPatients };
+    return { totalClinics, verificationGroups, totalDoctors, totalPatients, expiringDocumentsCount, expiredDocumentsCount };
+  },
+
+  /** Phase 17 — Compliance & Renewal. Filters at the DB level (never loads every document with an
+   * expiry and filters in memory) — `status` narrows to exactly one tier, omitted means "either
+   * at-risk tier" (EXPIRED is a subset of "<= window end", so a single `lte` covers both). */
+  async listComplianceDocuments(filters: { status?: 'EXPIRING_SOON' | 'EXPIRED'; page: number; limit: number }, now: Date = new Date()) {
+    const expiringSoonWindowEnd = new Date(now.getTime() + EXPIRING_SOON_WINDOW_DAYS * 24 * 60 * 60_000);
+    const where: Prisma.ClinicDocumentWhereInput =
+      filters.status === 'EXPIRED'
+        ? { expiryDate: { not: null, lt: now } }
+        : filters.status === 'EXPIRING_SOON'
+          ? { expiryDate: { gte: now, lte: expiringSoonWindowEnd } }
+          : { expiryDate: { not: null, lte: expiringSoonWindowEnd } };
+
+    const [items, total] = await Promise.all([
+      prisma.clinicDocument.findMany({
+        where,
+        include: complianceRowInclude,
+        orderBy: { expiryDate: 'asc' },
+        skip: (filters.page - 1) * filters.limit,
+        take: filters.limit,
+      }),
+      prisma.clinicDocument.count({ where }),
+    ]);
+    return { items, total };
   },
 
   async listClinics(filters: { verificationStatus?: ClinicVerificationStatus; search?: string; page: number; limit: number }) {

@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Building2, LayoutDashboard, LifeBuoy } from 'lucide-react';
+import { Building2, LayoutDashboard, LifeBuoy, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export const PLATFORM_ADMIN_NAV_LINKS = [
   { href: '/platform-admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/platform-admin/clinics', label: 'Clinics', icon: Building2 },
+  { href: '/platform-admin/compliance', label: 'Compliance', icon: ShieldAlert },
   { href: '/platform-admin/tickets', label: 'Support Tickets', icon: LifeBuoy },
 ];
 

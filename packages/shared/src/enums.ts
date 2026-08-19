@@ -178,6 +178,8 @@ export const NotificationType = {
 
   SUPPORT_TICKET_UPDATE: 'SUPPORT_TICKET_UPDATE',
 
+  CLINIC_DOCUMENT_EXPIRING: 'CLINIC_DOCUMENT_EXPIRING',
+
   SECURITY_LOGIN: 'SECURITY_LOGIN',
   SECURITY_PASSWORD_CHANGED: 'SECURITY_PASSWORD_CHANGED',
 } as const;
@@ -412,3 +414,17 @@ export const SupportTicketStatus = {
   CLOSED: 'CLOSED',
 } as const;
 export type SupportTicketStatus = (typeof SupportTicketStatus)[keyof typeof SupportTicketStatus];
+
+// ---------------------------------------------------------------------------
+// Clinic Document Expiry & Renewal Compliance (Phase 17)
+// ---------------------------------------------------------------------------
+
+/** Display-only, like `SlotStatus` — never persisted; derived at read time from
+ * `ClinicDocument.expiryDate`. */
+export const DocumentExpiryStatus = {
+  NOT_TRACKED: 'NOT_TRACKED',
+  VALID: 'VALID',
+  EXPIRING_SOON: 'EXPIRING_SOON',
+  EXPIRED: 'EXPIRED',
+} as const;
+export type DocumentExpiryStatus = (typeof DocumentExpiryStatus)[keyof typeof DocumentExpiryStatus];

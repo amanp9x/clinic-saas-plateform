@@ -27,3 +27,12 @@ export const platformClinicDocumentParamSchema = z.object({
   id: z.string().uuid('Invalid clinic id'),
   documentId: z.string().uuid('Invalid document id'),
 });
+
+/** Phase 17 — Compliance & Renewal. `status` here is the display-only `DocumentExpiryStatus`,
+ * not a persisted field — omit it to see both at-risk tiers (EXPIRING_SOON + EXPIRED) together. */
+export const complianceDocumentsQuerySchema = z.object({
+  status: z.enum(['EXPIRING_SOON', 'EXPIRED']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+});
+export type ComplianceDocumentsQuery = z.infer<typeof complianceDocumentsQuerySchema>;

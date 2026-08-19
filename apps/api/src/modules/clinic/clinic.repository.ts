@@ -41,4 +41,8 @@ export const clinicRepository = {
   deleteDocument(id: string) {
     return prisma.clinicDocument.delete({ where: { id } });
   },
+
+  updateDocumentExpiry(id: string, expiryDate: Date | null) {
+    return prisma.clinicDocument.update({ where: { id }, data: { expiryDate }, include: { uploadedBy: true } });
+  },
 };

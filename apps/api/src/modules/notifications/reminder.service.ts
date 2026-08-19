@@ -2,7 +2,7 @@ import type { AppointmentStatus } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 import { logger } from '../../config/logger.js';
 import { notifyUser } from './notification-dispatch.service.js';
-import { appointmentReminderEmail, followUpDueEmail } from './email/templates.js';
+import { appointmentReminderEmail, clinicDocumentExpiringEmail, followUpDueEmail } from './email/templates.js';
 import { env } from '../../config/env.js';
 
 const ACTIVE_STATUSES: AppointmentStatus[] = ['CONFIRMED', 'CHECKED_IN'];
@@ -175,6 +175,99 @@ export async function processDueFollowUpReminders(now: Date = new Date()): Promi
   return { processed };
 }
 
+function documentComplianceUrl(): string {
+  return `${env.WEB_URL}/clinic/documents`;
+}
+
+function documentTypeLabel(type: string): string {
+  return type
+    .toLowerCase()
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+interface DocumentExpiryTier {
+  key: string;
+  daysBefore: number;
+  isExpired: boolean;
+}
+
+/** Three fixed tiers, evaluated in order — same tiered-reminder shape as `DAY_BEFORE_TIER` above,
+ * just for a longer-horizon event. `daysBefore: 0` for the 'expired' tier means "due the instant
+ * `now` reaches the expiry date itself". */
+const DOCUMENT_EXPIRY_TIERS: DocumentExpiryTier[] = [
+  { key: '30d', daysBefore: 30, isExpired: false },
+  { key: '7d', daysBefore: 7, isExpired: false },
+  { key: 'expired', daysBefore: 0, isExpired: true },
+];
+
+/**
+ * Phase 17 — Compliance & Renewal. Same idempotent-via-notificationKey idiom as every other
+ * reminder in this file: each (document, tier) pair produces at most one notification ever,
+ * enforced by `Notification.notificationKey`'s unique index — so two overlapping ticks (or a tick
+ * re-running after a crash) can never double-send. Notifies every active CLINIC_ADMIN staff
+ * member of the owning clinic, same "who to notify for a clinic-wide event" query used throughout
+ * this codebase (e.g. platform-admin's `clinicAdminUserIds`).
+ */
+export async function processDueDocumentExpiryReminders(now: Date = new Date()): Promise<{ processed: number }> {
+  let processed = 0;
+  const windowEnd = new Date(now.getTime() + 30 * 24 * 60 * 60_000);
+
+  const candidates = await prisma.clinicDocument.findMany({
+    where: { expiryDate: { not: null, lte: windowEnd } },
+    select: { id: true, type: true, fileName: true, expiryDate: true, clinicId: true, clinic: { select: { name: true } } },
+  });
+
+  for (const doc of candidates) {
+    for (const tier of DOCUMENT_EXPIRY_TIERS) {
+      const dueAt = new Date(doc.expiryDate!.getTime() - tier.daysBefore * 24 * 60 * 60_000);
+      if (now < dueAt) continue;
+
+      const notificationKey = `doc-expiry:${doc.id}:${tier.key}`;
+      const existing = await prisma.notification.findUnique({ where: { notificationKey }, select: { id: true } });
+      if (existing) continue;
+
+      const admins = await prisma.clinicStaffMember.findMany({
+        where: { clinicId: doc.clinicId, isActive: true, user: { role: 'CLINIC_ADMIN' } },
+        select: { userId: true, user: { select: { email: true } } },
+      });
+
+      const typeLabel = documentTypeLabel(doc.type);
+      const actionUrl = documentComplianceUrl();
+      for (const admin of admins) {
+        const email = admin.user.email
+          ? clinicDocumentExpiringEmail({
+              clinicName: doc.clinic.name,
+              documentTypeLabel: typeLabel,
+              fileName: doc.fileName,
+              expiryDate: doc.expiryDate!,
+              isExpired: tier.isExpired,
+              actionUrl,
+            })
+          : undefined;
+
+        await notifyUser({
+          userId: admin.userId,
+          type: 'CLINIC_DOCUMENT_EXPIRING',
+          title: tier.isExpired ? `${typeLabel} has expired` : `${typeLabel} expiring soon`,
+          message: tier.isExpired
+            ? `${doc.fileName} expired on ${doc.expiryDate!.toLocaleDateString('en-IN')}. Please upload a renewed copy.`
+            : `${doc.fileName} expires on ${doc.expiryDate!.toLocaleDateString('en-IN')}. Please renew it soon.`,
+          relatedEntityType: 'ClinicDocument',
+          relatedEntityId: doc.id,
+          actionUrl,
+          notificationKey,
+          email,
+        });
+      }
+      processed++;
+    }
+  }
+
+  return { processed };
+}
+
 let reminderInterval: NodeJS.Timeout | null = null;
 
 /** Started once at process boot (server.ts only — never in app.ts/tests, so the test suite never
@@ -186,6 +279,7 @@ export function startReminderScheduler(intervalMs = 60_000): void {
   reminderInterval = setInterval(() => {
     processDueReminders().catch((err) => logger.error({ err }, 'processDueReminders failed'));
     processDueFollowUpReminders().catch((err) => logger.error({ err }, 'processDueFollowUpReminders failed'));
+    processDueDocumentExpiryReminders().catch((err) => logger.error({ err }, 'processDueDocumentExpiryReminders failed'));
   }, intervalMs);
   reminderInterval.unref?.();
 }

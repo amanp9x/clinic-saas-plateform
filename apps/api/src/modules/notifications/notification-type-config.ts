@@ -82,6 +82,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // PAYMENT_FAILED and WAITLIST_SLOT_AVAILABLE.
   CLINIC_VERIFICATION_UPDATED: { tier: 'TRANSACTIONAL', category: 'none', priority: 'HIGH' },
 
+  // Phase 17 — Compliance & Renewal. TRANSACTIONAL, HIGH priority: an expiring/expired
+  // registration or license is a real compliance risk, not something a clinic admin should be
+  // able to silently mute via a preference toggle — same reasoning as CLINIC_VERIFICATION_UPDATED.
+  CLINIC_DOCUMENT_EXPIRING: { tier: 'TRANSACTIONAL', category: 'none', priority: 'HIGH' },
+
   // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
   // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
   // must never be silently suppressed by a preference toggle — same reasoning as

@@ -3,6 +3,8 @@ import { SOCKET_EVENTS } from '@clinic/shared';
 import type {
   ClinicDocumentStatusUpdateInput,
   ClinicVerificationUpdateInput,
+  ComplianceDocumentRowDto,
+  ComplianceDocumentsQuery,
   PaginatedResult,
   PlatformClinicDetailDto,
   PlatformClinicListQuery,
@@ -10,7 +12,7 @@ import type {
   PlatformOverviewDto,
 } from '@clinic/shared';
 import { platformAdminRepository } from './platform-admin.repository.js';
-import { toPlatformClinicDetailDto, toPlatformClinicRowDto } from './platform-admin.mappers.js';
+import { toComplianceDocumentRowDto, toPlatformClinicDetailDto, toPlatformClinicRowDto } from './platform-admin.mappers.js';
 import { clinicRepository } from '../clinic/clinic.repository.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
@@ -40,13 +42,20 @@ function clinicProfileUrl(): string {
 
 export const platformAdminService = {
   async getOverview(): Promise<PlatformOverviewDto> {
-    const { totalClinics, verificationGroups, totalDoctors, totalPatients } = await platformAdminRepository.overview();
+    const { totalClinics, verificationGroups, totalDoctors, totalPatients, expiringDocumentsCount, expiredDocumentsCount } = await platformAdminRepository.overview();
     return {
       totalClinics,
       verificationBreakdown: verificationGroups.map((g) => ({ status: g.verificationStatus, count: g._count })),
       totalDoctors,
       totalPatients,
+      expiringDocumentsCount,
+      expiredDocumentsCount,
     };
+  },
+
+  async listComplianceDocuments(query: ComplianceDocumentsQuery): Promise<PaginatedResult<ComplianceDocumentRowDto>> {
+    const { items, total } = await platformAdminRepository.listComplianceDocuments({ status: query.status, page: query.page, limit: query.limit });
+    return { items: items.map(toComplianceDocumentRowDto), page: query.page, limit: query.limit, total, totalPages: Math.max(1, Math.ceil(total / query.limit)) };
   },
 
   async listClinics(query: PlatformClinicListQuery): Promise<PaginatedResult<PlatformClinicRowDto>> {

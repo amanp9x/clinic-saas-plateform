@@ -59,6 +59,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
 
   SUPPORT_TICKET_UPDATE: LifeBuoy,
 
+  CLINIC_DOCUMENT_EXPIRING: ShieldCheck,
+
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,
 };

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   ClinicVerificationStatus,
+  ComplianceDocumentRowDto,
   PaginatedResult,
   PlatformClinicDetailDto,
   PlatformClinicRowDto,
@@ -55,6 +56,24 @@ export function useUpdateClinicVerification() {
     mutationFn: ({ id, status, notes }: { id: string; status: ClinicVerificationStatus; notes?: string }) =>
       apiFetch<{ clinic: PlatformClinicDetailDto }>(`/api/v1/platform-admin/clinics/${id}/verification`, { method: 'PATCH', body: { status, notes } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PLATFORM_KEY }),
+  });
+}
+
+export interface ComplianceDocumentFilters {
+  status?: 'EXPIRING_SOON' | 'EXPIRED';
+  page?: number;
+  limit?: number;
+}
+
+export function usePlatformComplianceDocuments(filters: ComplianceDocumentFilters) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set('status', filters.status);
+  params.set('page', String(filters.page ?? 1));
+  params.set('limit', String(filters.limit ?? 25));
+
+  return useQuery({
+    queryKey: [...PLATFORM_KEY, 'compliance', filters] as const,
+    queryFn: () => apiFetch<PaginatedResult<ComplianceDocumentRowDto>>(`/api/v1/platform-admin/compliance/documents?${params.toString()}`),
   });
 }
 

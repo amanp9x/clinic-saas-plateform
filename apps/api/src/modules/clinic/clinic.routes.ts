@@ -6,6 +6,7 @@ import {
   clinicSettingsUpdateSchema,
   clinicStatusUpdateSchema,
   clinicVerificationSubmitSchema,
+  documentExpiryUpdateSchema,
   documentUploadSchema,
   idParamSchema,
 } from '@clinic/shared';
@@ -43,3 +44,8 @@ clinicRouter.get(
   clinicController.downloadDocument,
 );
 clinicRouter.delete('/documents/:id', validate({ params: idParamSchema, query: clinicIdQuerySchema }), clinicController.deleteDocument);
+clinicRouter.patch(
+  '/documents/:id/expiry',
+  validate({ params: idParamSchema, body: documentExpiryUpdateSchema }),
+  clinicController.updateDocumentExpiry,
+);

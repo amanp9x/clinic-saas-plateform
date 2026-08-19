@@ -216,3 +216,27 @@ export function securityLoginEmail(ctx: { patientName: string; whenLabel: string
   });
   return { subject: 'New sign-in to your account', html, text };
 }
+
+export interface DocumentExpiryEmailContext {
+  clinicName: string;
+  documentTypeLabel: string;
+  fileName: string;
+  expiryDate: Date;
+  isExpired: boolean;
+  actionUrl: string;
+}
+
+export function clinicDocumentExpiringEmail(ctx: DocumentExpiryEmailContext): RenderedEmail {
+  const { html, text } = renderShell({
+    clinicName: ctx.clinicName,
+    heading: ctx.isExpired ? 'A compliance document has expired' : 'A compliance document is expiring soon',
+    lines: [
+      ctx.isExpired
+        ? `Your ${ctx.documentTypeLabel} ("${ctx.fileName}") expired on ${formatDateOnly(ctx.expiryDate)}. Please upload a renewed copy as soon as possible.`
+        : `Your ${ctx.documentTypeLabel} ("${ctx.fileName}") expires on ${formatDateOnly(ctx.expiryDate)}. Please renew it before then to stay compliant.`,
+    ],
+    actionLabel: 'Manage documents',
+    actionUrl: ctx.actionUrl,
+  });
+  return { subject: ctx.isExpired ? 'Compliance document expired' : 'Compliance document expiring soon', html, text };
+}

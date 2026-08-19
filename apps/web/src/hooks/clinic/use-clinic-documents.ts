@@ -22,13 +22,23 @@ export function useClinicDocuments(clinicId: string | undefined) {
 export function useUploadClinicDocument(clinicId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ file, type }: { file: File; type: ClinicDocumentType }) => {
+    mutationFn: ({ file, type, expiryDate }: { file: File; type: ClinicDocumentType; expiryDate?: string }) => {
       const formData = new FormData();
       formData.append('clinicId', clinicId ?? '');
       formData.append('type', type);
+      if (expiryDate) formData.append('expiryDate', expiryDate);
       formData.append('file', file);
       return apiFetch<{ document: ClinicDocumentDto }>('/api/v1/clinic/documents', { method: 'POST', body: formData });
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(clinicId) }),
+  });
+}
+
+export function useUpdateClinicDocumentExpiry(clinicId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, expiryDate }: { documentId: string; expiryDate: string | null }) =>
+      apiFetch<{ document: ClinicDocumentDto }>(`/api/v1/clinic/documents/${documentId}/expiry`, { method: 'PATCH', body: { clinicId, expiryDate } }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: documentsKey(clinicId) }),
   });
 }

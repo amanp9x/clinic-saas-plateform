@@ -3,6 +3,7 @@ import {
   UserRole,
   clinicDocumentStatusUpdateSchema,
   clinicVerificationUpdateSchema,
+  complianceDocumentsQuerySchema,
   idParamSchema,
   platformClinicDocumentParamSchema,
   platformClinicListQuerySchema,
@@ -32,3 +33,6 @@ platformAdminRouter.patch(
   validate({ params: platformClinicDocumentParamSchema, body: clinicDocumentStatusUpdateSchema }),
   platformAdminController.updateDocumentStatus,
 );
+
+// Phase 17 — Compliance & Renewal.
+platformAdminRouter.get('/compliance/documents', validate({ query: complianceDocumentsQuerySchema }), platformAdminController.listComplianceDocuments);

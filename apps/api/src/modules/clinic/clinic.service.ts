@@ -96,7 +96,7 @@ export const clinicService = {
     return toClinicSettingsDto(updated);
   },
 
-  async uploadDocument(userId: string, role: UserRole, clinicId: string, type: ClinicDocumentType, file: Express.Multer.File) {
+  async uploadDocument(userId: string, role: UserRole, clinicId: string, type: ClinicDocumentType, expiryDate: string | undefined, file: Express.Multer.File) {
     await assertClinicPermission(userId, role, clinicId, CLINIC_PERMISSIONS.CLINIC_DOCUMENTS_MANAGE);
     await requireClinic(clinicId);
 
@@ -114,9 +114,10 @@ export const clinicService = {
       fileSizeBytes: file.size,
       mimeType: file.mimetype,
       uploadedByUserId: userId,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
     });
 
-    recordAuditLog({ actorUserId: userId, action: 'clinic.document_uploaded', entityType: 'ClinicDocument', entityId: doc.id, clinicId, metadata: { type, fileName: file.originalname } });
+    recordAuditLog({ actorUserId: userId, action: 'clinic.document_uploaded', entityType: 'ClinicDocument', entityId: doc.id, clinicId, metadata: { type, fileName: file.originalname, expiryDate: expiryDate || null } });
     return toClinicDocumentDto(doc);
   },
 
@@ -142,6 +143,27 @@ export const clinicService = {
     await clinicRepository.deleteDocument(documentId);
 
     recordAuditLog({ actorUserId: userId, action: 'clinic.document_deleted', entityType: 'ClinicDocument', entityId: documentId, clinicId, metadata: { fileName: doc.fileName } });
+  },
+
+  /** Phase 17 — Compliance & Renewal. Lets a clinic set/correct/clear a document's expiry date
+   * without needing a full re-upload — useful both to backfill dates on documents uploaded before
+   * this phase existed, and to update a date after physically renewing a license offline. */
+  async updateDocumentExpiry(userId: string, role: UserRole, clinicId: string, documentId: string, expiryDate: string | null) {
+    await assertClinicPermission(userId, role, clinicId, CLINIC_PERMISSIONS.CLINIC_DOCUMENTS_MANAGE);
+    const doc = await clinicRepository.findDocument(documentId, clinicId);
+    if (!doc) throw new NotFoundError('Document');
+
+    const updated = await clinicRepository.updateDocumentExpiry(documentId, expiryDate ? new Date(expiryDate) : null);
+
+    recordAuditLog({
+      actorUserId: userId,
+      action: 'clinic.document_expiry_updated',
+      entityType: 'ClinicDocument',
+      entityId: documentId,
+      clinicId,
+      metadata: { previousExpiryDate: doc.expiryDate, newExpiryDate: expiryDate },
+    });
+    return toClinicDocumentDto(updated);
   },
 
   async getDashboard(userId: string, role: UserRole, clinicId: string) {

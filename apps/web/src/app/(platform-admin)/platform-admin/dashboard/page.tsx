@@ -1,6 +1,6 @@
 'use client';
 
-import { Building2, ClipboardCheck, Stethoscope, Users } from 'lucide-react';
+import { Building2, ClipboardCheck, ShieldAlert, Stethoscope, Users } from 'lucide-react';
 import { usePlatformOverview } from '@/hooks/platform-admin/use-platform-admin';
 import { StatCard, StatCardSkeleton } from '@/components/patient/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function PlatformAdminDashboardPage() {
   const { data: overview, isLoading } = usePlatformOverview();
   const pendingReview = overview?.verificationBreakdown.find((b) => b.status === 'SUBMITTED')?.count ?? 0;
+  const atRiskDocuments = (overview?.expiringDocumentsCount ?? 0) + (overview?.expiredDocumentsCount ?? 0);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -45,6 +46,13 @@ export default function PlatformAdminDashboardPage() {
             />
             <StatCard icon={Stethoscope} label="Total doctors" value={overview.totalDoctors} href="/platform-admin/clinics" />
             <StatCard icon={Users} label="Total patients" value={overview.totalPatients} href="/platform-admin/clinics" />
+            <StatCard
+              icon={ShieldAlert}
+              label="At-risk documents"
+              value={atRiskDocuments}
+              hint={atRiskDocuments > 0 ? 'Expiring or expired' : undefined}
+              href="/platform-admin/compliance"
+            />
           </>
         )}
       </div>

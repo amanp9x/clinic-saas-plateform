@@ -1,7 +1,8 @@
 import type { ClinicDocument, User } from '@prisma/client';
-import type { PlatformClinicDetailDto, PlatformClinicRowDto } from '@clinic/shared';
+import type { ComplianceDocumentRowDto, PlatformClinicDetailDto, PlatformClinicRowDto } from '@clinic/shared';
 import { toClinicDocumentDto } from '../clinic/clinic.mappers.js';
-import type { PlatformClinicDetailWithRelations, PlatformClinicRowWithRelations } from './platform-admin.repository.js';
+import { computeDocumentExpiryStatus } from '../../utils/document-expiry.util.js';
+import type { ComplianceDocumentRowWithRelations, PlatformClinicDetailWithRelations, PlatformClinicRowWithRelations } from './platform-admin.repository.js';
 
 export function toPlatformClinicRowDto(clinic: PlatformClinicRowWithRelations): PlatformClinicRowDto {
   return {
@@ -42,5 +43,17 @@ export function toPlatformClinicDetailDto(
     verificationReviewNotes: clinic.verificationReviewNotes,
     staffCount: clinic._count.staff,
     documents: documents.map(toClinicDocumentDto),
+  };
+}
+
+export function toComplianceDocumentRowDto(doc: ComplianceDocumentRowWithRelations): ComplianceDocumentRowDto {
+  return {
+    id: doc.id,
+    clinicId: doc.clinicId,
+    clinicName: doc.clinic.name,
+    type: doc.type,
+    fileName: doc.fileName,
+    expiryDate: doc.expiryDate!.toISOString().slice(0, 10),
+    expiryStatus: computeDocumentExpiryStatus(doc.expiryDate),
   };
 }

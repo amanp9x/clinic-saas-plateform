@@ -7,6 +7,7 @@ import type {
   ClinicResourceType,
   ClinicVerificationStatus,
   ConsultationType,
+  DocumentExpiryStatus,
   DoctorSessionStatus,
   Gender,
   PatientDataVisibility,
@@ -69,6 +70,9 @@ export interface ClinicDocumentDto {
   uploadedByUserId: string;
   uploadedByName: string | null;
   createdAt: string;
+  /** Phase 17 — Compliance & Renewal. */
+  expiryDate: string | null;
+  expiryStatus: DocumentExpiryStatus;
 }
 
 export interface ClinicDashboardSummaryDto {

@@ -64,8 +64,18 @@ export type ClinicStatusUpdateInput = z.infer<typeof clinicStatusUpdateSchema>;
 export const documentUploadSchema = z.object({
   clinicId: z.string().uuid('Select a clinic'),
   type: z.nativeEnum(ClinicDocumentType),
+  expiryDate: z.string().date('Enter a valid date').optional().or(z.literal('')),
 });
 export type DocumentUploadInput = z.infer<typeof documentUploadSchema>;
+
+/** Phase 17 — Compliance & Renewal. `expiryDate: null` explicitly clears a previously-set date
+ * (distinct from omitting the field, which zod would treat as "no change" if this were partial —
+ * this endpoint always sets the field to exactly what's sent). */
+export const documentExpiryUpdateSchema = z.object({
+  clinicId: z.string().uuid('Select a clinic'),
+  expiryDate: z.string().date('Enter a valid date').nullable(),
+});
+export type DocumentExpiryUpdateInput = z.infer<typeof documentExpiryUpdateSchema>;
 
 export const doctorSearchQuerySchema = z.object({
   clinicId: z.string().uuid('Select a clinic'),

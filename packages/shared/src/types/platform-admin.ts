@@ -1,5 +1,5 @@
 import type { ClinicDocumentDto } from './clinic.js';
-import type { ClinicOperatingStatus, ClinicVerificationStatus } from '../enums.js';
+import type { ClinicDocumentType, ClinicOperatingStatus, ClinicVerificationStatus, DocumentExpiryStatus } from '../enums.js';
 
 /** Phase 15 — Platform Admin. `SUPER_ADMIN`/`PLATFORM_ADMIN` roles have existed since Phase 1
  * (bypassing clinic-permission checks) but had no actual platform-wide screens until now. */
@@ -8,6 +8,9 @@ export interface PlatformOverviewDto {
   verificationBreakdown: { status: ClinicVerificationStatus; count: number }[];
   totalDoctors: number;
   totalPatients: number;
+  /** Phase 17 — Compliance & Renewal. */
+  expiringDocumentsCount: number;
+  expiredDocumentsCount: number;
 }
 
 export interface PlatformClinicRowDto {
@@ -35,4 +38,16 @@ export interface PlatformClinicDetailDto extends PlatformClinicRowDto {
   verificationReviewNotes: string | null;
   staffCount: number;
   documents: ClinicDocumentDto[];
+}
+
+/** Phase 17 — Compliance & Renewal. One row per at-risk document, across every clinic — the
+ * platform-wide compliance queue. */
+export interface ComplianceDocumentRowDto {
+  id: string;
+  clinicId: string;
+  clinicName: string;
+  type: ClinicDocumentType;
+  fileName: string;
+  expiryDate: string;
+  expiryStatus: DocumentExpiryStatus;
 }

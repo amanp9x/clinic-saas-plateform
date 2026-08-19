@@ -28,4 +28,9 @@ export const platformAdminController = {
     const clinic = await platformAdminService.updateDocumentStatus(req.user!.id, req.params.id!, req.params.documentId!, req.body);
     sendSuccess(res, { clinic }, { message: 'Document status updated' });
   }),
+
+  listComplianceDocuments: asyncHandler(async (req: Request, res: Response) => {
+    const result = await platformAdminService.listComplianceDocuments(req.query as never);
+    sendSuccess(res, result);
+  }),
 };

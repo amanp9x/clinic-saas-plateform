@@ -161,6 +161,8 @@ enum NotificationType {
 
   SUPPORT_TICKET_UPDATE
 
+  CLINIC_DOCUMENT_EXPIRING
+
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
 }
@@ -1792,6 +1794,10 @@ model ClinicDocument {
   mimeType         String
   status           ClinicDocumentStatus @default(UPLOADED)
   uploadedByUserId String
+  /// Phase 17 — Compliance & Renewal. Optional: not every document type (e.g. OTHER) necessarily
+  /// expires. Expiry *status* (VALID/EXPIRING_SOON/EXPIRED) is never persisted — derived at read
+  /// time from this date, same convention as SlotStatus/the waitlist's display-only states.
+  expiryDate       DateTime?            @db.Date
 
   createdAt DateTime @default(now())
 
@@ -1799,6 +1805,7 @@ model ClinicDocument {
   uploadedBy User   @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
   @@index([clinicId, type])
+  @@index([expiryDate])
   @@map("clinic_documents")
 }
 

@@ -1,5 +1,6 @@
 import type { Clinic, ClinicDocument, ClinicSettings, User } from '@prisma/client';
 import type { ClinicDocumentDto, ClinicProfileDto, ClinicSettingsDto } from '@clinic/shared';
+import { computeDocumentExpiryStatus } from '../../utils/document-expiry.util.js';
 
 export function toClinicProfileDto(clinic: Clinic): ClinicProfileDto {
   return {
@@ -56,6 +57,8 @@ export function toClinicDocumentDto(doc: ClinicDocument & { uploadedBy: User }):
     uploadedByUserId: doc.uploadedByUserId,
     uploadedByName: doc.uploadedBy.email ?? doc.uploadedBy.phone,
     createdAt: doc.createdAt.toISOString(),
+    expiryDate: doc.expiryDate ? doc.expiryDate.toISOString().slice(0, 10) : null,
+    expiryStatus: computeDocumentExpiryStatus(doc.expiryDate),
   };
 }
 
