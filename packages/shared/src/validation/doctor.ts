@@ -214,6 +214,39 @@ export const patientIdParamSchema = z.object({
 });
 export type PatientIdParam = z.infer<typeof patientIdParamSchema>;
 
+export const patientEntryIdParamSchema = z.object({
+  patientId: z.string().uuid('Invalid patient id'),
+  id: z.string().uuid('Invalid id'),
+});
+export type PatientEntryIdParam = z.infer<typeof patientEntryIdParamSchema>;
+
+/// Phase 18 — Lab Reports & Vaccination entry workflow. A doctor orders a test (status defaults
+/// PENDING, no result yet) then later updates it with the result via `labReportUpdateSchema`.
+export const labReportCreateSchema = z.object({
+  testName: z.string().trim().min(1, 'Enter a test name').max(200),
+  labName: z.string().trim().max(200).optional().or(z.literal('')),
+  appointmentId: z.string().uuid('Invalid appointment id').optional(),
+  notes: z.string().trim().max(1000).optional().or(z.literal('')),
+});
+export type LabReportCreateInput = z.infer<typeof labReportCreateSchema>;
+
+export const labReportUpdateSchema = z.object({
+  status: z.enum(['PENDING', 'READY']).optional(),
+  reportDate: z.string().date('Enter a valid date').optional().or(z.literal('')),
+  notes: z.string().trim().max(1000).optional().or(z.literal('')),
+});
+export type LabReportUpdateInput = z.infer<typeof labReportUpdateSchema>;
+
+export const vaccinationCreateSchema = z.object({
+  vaccineName: z.string().trim().min(1, 'Enter a vaccine name').max(200),
+  doseNumber: z.coerce.number().int().min(1).max(20).optional(),
+  administeredDate: z.string().date('Enter a valid date'),
+  nextDueDate: z.string().date('Enter a valid date').optional().or(z.literal('')),
+  administeredBy: z.string().trim().max(200).optional().or(z.literal('')),
+  notes: z.string().trim().max(1000).optional().or(z.literal('')),
+});
+export type VaccinationCreateInput = z.infer<typeof vaccinationCreateSchema>;
+
 export const clinicIdParamSchema = z.object({
   clinicId: z.string().uuid('Invalid clinic id'),
 });

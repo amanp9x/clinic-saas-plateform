@@ -1,9 +1,14 @@
 'use client';
 
+import { Plus } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { usePatientMedicalHistory } from '@/hooks/doctor/use-doctor-patient';
+import { OrderLabReportDialog } from '@/components/doctor/order-lab-report-dialog';
+import { UpdateLabReportDialog } from '@/components/doctor/update-lab-report-dialog';
+import { RecordVaccinationDialog } from '@/components/doctor/record-vaccination-dialog';
 import { AppointmentStatusBadge } from '@/components/patient/appointment-status-badge';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/marketing/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,6 +40,7 @@ export default function PatientMedicalHistoryPage() {
           <TabsTrigger value="appointments">Appointments</TabsTrigger>
           <TabsTrigger value="prescriptions">Prescriptions</TabsTrigger>
           <TabsTrigger value="reports">Lab Reports</TabsTrigger>
+          <TabsTrigger value="vaccinations">Vaccinations</TabsTrigger>
           <TabsTrigger value="vitals">Vitals</TabsTrigger>
           <TabsTrigger value="records">Records</TabsTrigger>
         </TabsList>
@@ -85,19 +91,70 @@ export default function PatientMedicalHistoryPage() {
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-3 pt-4">
+          <div className="flex justify-end">
+            <OrderLabReportDialog
+              patientId={params.patientId}
+              trigger={
+                <Button size="sm">
+                  <Plus className="size-4" />
+                  Order test
+                </Button>
+              }
+            />
+          </div>
           {history.labReports.length === 0 ? (
-            <EmptyState title="No lab reports on file" />
+            <EmptyState title="No lab reports on file" description="Order a test to start tracking results here." />
           ) : (
             history.labReports.map((report) => (
-              <Card key={report.id}>
-                <CardContent className="flex items-center justify-between gap-2 py-3">
-                  <div>
-                    <p className="font-medium">{report.testName}</p>
-                    <p className="text-muted-foreground text-sm">{report.labName ?? 'Lab not specified'}</p>
+              <UpdateLabReportDialog
+                key={report.id}
+                patientId={params.patientId}
+                report={report}
+                trigger={
+                  <Card className="cursor-pointer transition-colors hover:bg-muted/40">
+                    <CardContent className="flex items-center justify-between gap-2 py-3">
+                      <div>
+                        <p className="font-medium">{report.testName}</p>
+                        <p className="text-muted-foreground text-sm">{report.labName ?? 'Lab not specified'}</p>
+                      </div>
+                      <Badge variant={report.status === 'READY' ? 'secondary' : 'outline'}>
+                        {report.status === 'READY' ? 'Ready' : 'Pending'}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                }
+              />
+            ))
+          )}
+        </TabsContent>
+
+        <TabsContent value="vaccinations" className="space-y-3 pt-4">
+          <div className="flex justify-end">
+            <RecordVaccinationDialog
+              patientId={params.patientId}
+              trigger={
+                <Button size="sm">
+                  <Plus className="size-4" />
+                  Record vaccination
+                </Button>
+              }
+            />
+          </div>
+          {history.vaccinations.length === 0 ? (
+            <EmptyState title="No vaccinations on file" description="Record a vaccination to start tracking it here." />
+          ) : (
+            history.vaccinations.map((v) => (
+              <Card key={v.id}>
+                <CardContent className="space-y-1 py-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">
+                      {v.vaccineName}
+                      {v.doseNumber != null && ` — Dose ${v.doseNumber}`}
+                    </p>
+                    <p className="text-muted-foreground text-sm">{formatDate(v.administeredDate)}</p>
                   </div>
-                  <Badge variant={report.status === 'READY' ? 'secondary' : 'outline'}>
-                    {report.status === 'READY' ? 'Ready' : 'Pending'}
-                  </Badge>
+                  {v.nextDueDate && <p className="text-muted-foreground text-xs">Next due {formatDate(v.nextDueDate)}</p>}
+                  {v.notes && <p className="text-muted-foreground text-sm">{v.notes}</p>}
                 </CardContent>
               </Card>
             ))

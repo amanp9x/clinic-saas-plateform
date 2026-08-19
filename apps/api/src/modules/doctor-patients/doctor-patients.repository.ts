@@ -1,3 +1,4 @@
+import type { LabReportStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 
 export const doctorPatientsRepository = {
@@ -22,5 +23,27 @@ export const doctorPatientsRepository = {
       },
       orderBy: { scheduledAt: 'desc' },
     });
+  },
+
+  createLabReport(patientId: string, data: { testName: string; labName: string | null; appointmentId: string | null; notes: string | null }) {
+    return prisma.labReport.create({ data: { patientId, ...data } });
+  },
+
+  findLabReport(id: string, patientId: string) {
+    return prisma.labReport.findFirst({ where: { id, patientId } });
+  },
+
+  updateLabReport(
+    id: string,
+    data: { status: LabReportStatus; reportDate: Date | null; notes: string | null; fileUrl: string | null },
+  ) {
+    return prisma.labReport.update({ where: { id }, data });
+  },
+
+  createVaccination(
+    patientId: string,
+    data: Omit<Prisma.VaccinationUncheckedCreateInput, 'patientId'>,
+  ) {
+    return prisma.vaccination.create({ data: { patientId, ...data } });
   },
 };
