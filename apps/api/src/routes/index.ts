@@ -42,6 +42,8 @@ import { waitlistRouter } from '../modules/waitlist/waitlist.routes.js';
 import { clinicWaitlistRouter } from '../modules/waitlist/clinic-waitlist.routes.js';
 import { clinicFollowUpsRouter } from '../modules/follow-up/clinic-follow-ups.routes.js';
 import { platformAdminRouter } from '../modules/platform-admin/platform-admin.routes.js';
+import { supportTicketRouter } from '../modules/support-tickets/support-ticket.routes.js';
+import { platformSupportTicketsRouter } from '../modules/support-tickets/platform-support-tickets.routes.js';
 
 export const apiRouter = Router();
 
@@ -59,6 +61,7 @@ apiRouter.use('/dashboard', dashboardRouter);
 apiRouter.use('/analytics', analyticsRouter);
 apiRouter.use('/reviews', reviewsRouter);
 apiRouter.use('/waitlist', waitlistRouter);
+apiRouter.use('/support/tickets', supportTicketRouter);
 
 // --- Payments & Billing (Phase 9) --------------------------------------------
 // The webhook router (unauthenticated, signature-verified) must be registered before the
@@ -101,5 +104,8 @@ apiRouter.use('/clinic/announcements', clinicAnnouncementRouter);
 apiRouter.use('/clinic/reviews', reviewModerationRouter);
 apiRouter.use('/clinic/waitlist', clinicWaitlistRouter);
 apiRouter.use('/clinic/follow-ups', clinicFollowUpsRouter);
+// More specific than the bare '/platform-admin' mount below — must be registered first, same
+// prefix-ordering reason as the '/clinic/*' block above.
+apiRouter.use('/platform-admin/tickets', platformSupportTicketsRouter);
 apiRouter.use('/platform-admin', platformAdminRouter);
 apiRouter.use('/clinic', clinicRouter);

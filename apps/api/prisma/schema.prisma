@@ -159,6 +159,8 @@ enum NotificationType {
 
   CLINIC_VERIFICATION_UPDATED
 
+  SUPPORT_TICKET_UPDATE
+
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
 }
@@ -433,6 +435,8 @@ model User {
   notificationPrefs    NotificationPreference?
   uploadedDocuments    ClinicDocument[]
   sentStaffInvitations StaffInvitation[]
+  supportTickets       SupportTicket[]
+  supportTicketMessages SupportTicketMessage[]
 
   @@index([role])
   @@map("users")
@@ -581,6 +585,7 @@ model Clinic {
   invoices         Invoice[]
   waitlistEntries  WaitlistEntry[]
   consultations    Consultation[]
+  supportTickets   SupportTicket[]
 
   @@index([slug])
   @@index([city])
@@ -1197,6 +1202,7 @@ model Appointment {
   /// Reverse of WaitlistEntry.fulfilledAppointmentId — at most one waitlist entry can point back
   /// to a given appointment (enforced by that field's own @unique), so this is optional, not a list.
   fulfilledWaitlistEntry WaitlistEntry?
+  supportTickets         SupportTicket[]
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -1380,6 +1386,7 @@ model Payment {
   webhookEvents PaymentWebhookEvent[]
   invoice       Invoice?
   refunds       Refund[]
+  supportTickets SupportTicket[]
 
   @@index([patientId])
   @@index([clinicId])
@@ -1986,4 +1993,83 @@ model ClinicSettings {
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@map("clinic_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Support Tickets & Grievance Resolution (Phase 16)
+// ---------------------------------------------------------------------------
+
+enum SupportTicketCategory {
+  APPOINTMENT
+  PAYMENT
+  DOCTOR_CONDUCT
+  CLINIC_SERVICE
+  TECHNICAL
+  OTHER
+}
+
+/// OPEN -> IN_PROGRESS -> RESOLVED -> CLOSED is the admin-driven path (see ALLOWED_ADMIN_
+/// TRANSITIONS in platform-admin-tickets.service.ts); a patient can additionally withdraw an
+/// OPEN ticket straight to CLOSED, or reopen a RESOLVED one back to IN_PROGRESS if unsatisfied.
+/// CLOSED is terminal — matches ClinicVerificationStatus's precedent of a small explicit
+/// transition table rather than a free-form status field.
+enum SupportTicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+/// A patient's support/grievance request — about a specific appointment, payment, doctor/clinic
+/// conduct, or a general platform issue — triaged and resolved by SUPER_ADMIN/PLATFORM_ADMIN (the
+/// same platform-wide roles Phase 15 built a real portal for). `clinicId` is always derived
+/// server-side from the linked appointment/payment's own record when one is supplied, never
+/// accepted directly from the client — same IDOR-safe convention as every other module here.
+model SupportTicket {
+  id               String                @id @default(uuid())
+  ticketNumber     String                @unique
+  raisedByUserId   String
+  clinicId         String?
+  appointmentId    String?
+  paymentId        String?
+  category         SupportTicketCategory
+  subject          String
+  description      String
+  status           SupportTicketStatus   @default(OPEN)
+
+  resolutionNotes  String?
+  resolvedAt       DateTime?
+  resolvedByUserId String?
+  closedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  raisedBy    User                    @relation(fields: [raisedByUserId], references: [id], onDelete: Cascade)
+  clinic      Clinic?                 @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  appointment Appointment?            @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  payment     Payment?                @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  messages    SupportTicketMessage[]
+
+  @@index([raisedByUserId, createdAt])
+  @@index([status])
+  @@index([clinicId])
+  @@map("support_tickets")
+}
+
+/// A single reply in a ticket's message thread — either the raiser or a platform admin. No
+/// separate "internal note" concept in this phase; `SupportTicket.resolutionNotes` already covers
+/// the one admin-only field the spec calls for.
+model SupportTicketMessage {
+  id           String   @id @default(uuid())
+  ticketId     String
+  senderUserId String
+  message      String
+  createdAt    DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender User          @relation(fields: [senderUserId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@map("support_ticket_messages")
 }

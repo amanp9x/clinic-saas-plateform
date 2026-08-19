@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Bell, CalendarClock, Clock, CreditCard, LayoutDashboard, Settings, Star, Stethoscope } from 'lucide-react';
+import { Bell, CalendarClock, Clock, CreditCard, LayoutDashboard, LifeBuoy, Settings, Star, Stethoscope } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useUnreadNotificationCount } from '@/hooks/patient/use-notifications';
@@ -14,6 +14,7 @@ export const PATIENT_NAV_LINKS = [
   { href: '/payments', label: 'Payments', icon: CreditCard },
   { href: '/reviews', label: 'My Reviews', icon: Star },
   { href: '/waitlist', label: 'Waitlist', icon: Clock },
+  { href: '/support/tickets', label: 'Support', icon: LifeBuoy, matchPrefix: '/support' },
   { href: '/notifications', label: 'Notifications', icon: Bell },
   { href: '/settings/profile', label: 'Settings', icon: Settings, matchPrefix: '/settings' },
 ];

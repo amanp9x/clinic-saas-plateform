@@ -176,6 +176,8 @@ export const NotificationType = {
 
   CLINIC_VERIFICATION_UPDATED: 'CLINIC_VERIFICATION_UPDATED',
 
+  SUPPORT_TICKET_UPDATE: 'SUPPORT_TICKET_UPDATE',
+
   SECURITY_LOGIN: 'SECURITY_LOGIN',
   SECURITY_PASSWORD_CHANGED: 'SECURITY_PASSWORD_CHANGED',
 } as const;
@@ -388,3 +390,25 @@ export const PatientDataVisibility = {
   FULL: 'FULL',
 } as const;
 export type PatientDataVisibility = (typeof PatientDataVisibility)[keyof typeof PatientDataVisibility];
+
+// ---------------------------------------------------------------------------
+// Support Tickets & Grievance Resolution (Phase 16)
+// ---------------------------------------------------------------------------
+
+export const SupportTicketCategory = {
+  APPOINTMENT: 'APPOINTMENT',
+  PAYMENT: 'PAYMENT',
+  DOCTOR_CONDUCT: 'DOCTOR_CONDUCT',
+  CLINIC_SERVICE: 'CLINIC_SERVICE',
+  TECHNICAL: 'TECHNICAL',
+  OTHER: 'OTHER',
+} as const;
+export type SupportTicketCategory = (typeof SupportTicketCategory)[keyof typeof SupportTicketCategory];
+
+export const SupportTicketStatus = {
+  OPEN: 'OPEN',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+  CLOSED: 'CLOSED',
+} as const;
+export type SupportTicketStatus = (typeof SupportTicketStatus)[keyof typeof SupportTicketStatus];

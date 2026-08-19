@@ -86,6 +86,11 @@ export const SOCKET_EVENTS = {
     CANCELLED: 'waitlist.cancelled',
     FULFILLED: 'waitlist.fulfilled',
   },
+  SUPPORT_TICKET: {
+    CREATED: 'support_ticket.created',
+    MESSAGE_ADDED: 'support_ticket.message_added',
+    STATUS_UPDATED: 'support_ticket.status_updated',
+  },
 } as const;
 
 /** Socket.IO namespaces. Clients join a clinic-scoped room after server-side authorization;

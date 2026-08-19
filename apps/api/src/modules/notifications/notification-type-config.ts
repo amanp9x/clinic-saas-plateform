@@ -82,6 +82,12 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // PAYMENT_FAILED and WAITLIST_SLOT_AVAILABLE.
   CLINIC_VERIFICATION_UPDATED: { tier: 'TRANSACTIONAL', category: 'none', priority: 'HIGH' },
 
+  // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
+  // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
+  // must never be silently suppressed by a preference toggle — same reasoning as
+  // CLINIC_VERIFICATION_UPDATED.
+  SUPPORT_TICKET_UPDATE: { tier: 'TRANSACTIONAL', category: 'none', priority: 'NORMAL' },
+
   SECURITY_LOGIN: { tier: 'SECURITY', category: 'none', priority: 'HIGH' },
   SECURITY_PASSWORD_CHANGED: { tier: 'SECURITY', category: 'none', priority: 'CRITICAL' },
 };
