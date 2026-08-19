@@ -69,8 +69,11 @@ export const doctorController = {
   }),
 
   createLeave: asyncHandler(async (req: Request, res: Response) => {
-    const leave = await doctorService.createLeave(req.user!.id, req.body);
-    sendSuccess(res, { leave }, { status: 201, message: 'Leave added' });
+    const { leave, cancelledAppointments } = await doctorService.createLeave(req.user!.id, req.body);
+    const message = cancelledAppointments.length > 0
+      ? `Leave added — ${cancelledAppointments.length} appointment${cancelledAppointments.length === 1 ? '' : 's'} cancelled and patient${cancelledAppointments.length === 1 ? '' : 's'} notified`
+      : 'Leave added';
+    sendSuccess(res, { leave, cancelledAppointments }, { status: 201, message });
   }),
 
   deleteLeave: asyncHandler(async (req: Request, res: Response) => {

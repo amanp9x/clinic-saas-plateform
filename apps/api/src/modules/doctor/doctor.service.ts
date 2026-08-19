@@ -15,6 +15,7 @@ import type {
   EarningsQuery,
   FollowUpRowDto,
   LeaveCreateInput,
+  LeaveCreateResultDto,
   PaginatedResult,
   ReviewRespondInput,
   ScheduleSlotCreateInput,
@@ -36,6 +37,9 @@ import { followUpRepository } from '../follow-up/follow-up.repository.js';
 import { toFollowUpRowDto } from '../follow-up/follow-up.mappers.js';
 import { prisma } from '../../config/database.js';
 import { NotFoundError, ValidationError } from '../../utils/app-error.js';
+import { bookingEngine } from '../booking/booking.engine.js';
+import { bookingRepository } from '../booking/booking.repository.js';
+import { paymentEngine } from '../payments/payment.engine.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
 import { endOfDay, startOfDay, startOfMonth, startOfWeek } from '../../utils/date.js';
@@ -186,7 +190,16 @@ export const doctorService = {
     return leaves.map(toLeaveDto);
   },
 
-  async createLeave(userId: string, input: LeaveCreateInput) {
+  /** Phase 19 — Doctor Leave conflict resolution. A doctor marking themselves unavailable for a
+   * date range must not silently leave existing PENDING/CONFIRMED appointments in that window
+   * standing — each is cancelled through the exact same `cancelCore`/`handleAppointmentCancelled`
+   * pair the patient- and reception-initiated cancel paths already use, so the affected patient
+   * gets the same notification/email/refund/waitlist-ping treatment as any other cancellation,
+   * with zero new cancellation logic invented for this phase. Best-effort per appointment: an
+   * atomic `updateMany`-guarded claim (see below) means a conflict already claimed by another
+   * concurrent operation between the lookup and this loop is silently skipped rather than failing
+   * the whole leave creation (the leave itself is already durably created by this point). */
+  async createLeave(userId: string, input: LeaveCreateInput): Promise<LeaveCreateResultDto> {
     const doctor = await resolveDoctorOrThrow(userId);
     if (input.clinicId) {
       await assertClinicMembership(doctor.id, input.clinicId);
@@ -198,8 +211,47 @@ export const doctorService = {
       reason: toNullable(input.reason) ?? null,
       type: input.type,
     });
-    recordAuditLog({ actorUserId: userId, action: 'doctor.leave_created', entityType: 'DoctorLeave', entityId: leave.id });
-    return toLeaveDto(leave);
+
+    const conflicts = await bookingRepository.findConflictingAppointments(
+      doctor.id,
+      input.clinicId ?? null,
+      startOfDay(new Date(input.startDate)),
+      endOfDay(new Date(input.endDate)),
+    );
+
+    const cancelledAppointments: LeaveCreateResultDto['cancelledAppointments'] = [];
+    for (const appointment of conflicts) {
+      // Atomic claim before touching `cancelCore` — `cancelCore`'s own cancellable-status check
+      // reads from the in-memory snapshot passed in, not a fresh row, so without this guard two
+      // concurrent leave-creation scans (or a scan racing a patient/reception cancel) could both
+      // observe the same CONFIRMED snapshot and both "succeed". Same claim-via-`updateMany`-and-
+      // check-count idiom used throughout this codebase (queue token claims, refund claims) —
+      // whoever wins the atomic status flip is the only caller that proceeds to `cancelCore`.
+      const claim = await prisma.appointment.updateMany({
+        where: { id: appointment.id, status: { in: ['PENDING', 'CONFIRMED'] } },
+        data: { status: 'CANCELLED' },
+      });
+      if (claim.count !== 1) continue;
+
+      await bookingEngine.cancelCore(appointment, { reason: 'Doctor unavailable (leave)', actorUserId: userId, source: 'DOCTOR' });
+      await paymentEngine.handleAppointmentCancelled(appointment.id, userId);
+      cancelledAppointments.push({
+        appointmentId: appointment.id,
+        bookingReference: appointment.bookingReference,
+        patientName: appointment.patient.fullName,
+        clinicName: appointment.clinic.name,
+        scheduledAt: appointment.scheduledAt.toISOString(),
+      });
+    }
+
+    recordAuditLog({
+      actorUserId: userId,
+      action: 'doctor.leave_created',
+      entityType: 'DoctorLeave',
+      entityId: leave.id,
+      metadata: { cancelledAppointmentCount: cancelledAppointments.length },
+    });
+    return { leave: toLeaveDto(leave), cancelledAppointments };
   },
 
   async deleteLeave(userId: string, id: string) {

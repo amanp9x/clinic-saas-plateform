@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { DoctorLeaveDto, LeaveCreateInput } from '@clinic/shared';
+import type { DoctorLeaveDto, LeaveCreateInput, LeaveCreateResultDto } from '@clinic/shared';
 import { apiFetch } from '@/lib/api-client';
 
 const LEAVES_KEY = ['doctor', 'leaves'] as const;
@@ -18,7 +18,7 @@ export function useCreateLeave() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: LeaveCreateInput) =>
-      apiFetch<{ leave: DoctorLeaveDto }>('/api/v1/doctor/leaves', { method: 'POST', body: input }),
+      apiFetch<LeaveCreateResultDto>('/api/v1/doctor/leaves', { method: 'POST', body: input }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: LEAVES_KEY }),
   });
 }

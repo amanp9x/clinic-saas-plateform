@@ -134,6 +134,21 @@ export interface DoctorLeaveDto {
   type: LeaveType;
 }
 
+/** Phase 19 — Doctor Leave conflict resolution. One row per appointment that was automatically
+ * cancelled because it fell inside a newly-created leave's date range. */
+export interface CancelledLeaveConflictDto {
+  appointmentId: string;
+  bookingReference: string;
+  patientName: string;
+  clinicName: string;
+  scheduledAt: string;
+}
+
+export interface LeaveCreateResultDto {
+  leave: DoctorLeaveDto;
+  cancelledAppointments: CancelledLeaveConflictDto[];
+}
+
 export interface DoctorSessionDto {
   id: string;
   doctorId: string;

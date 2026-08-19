@@ -42,8 +42,14 @@ export function LeaveDialog({ clinics, trigger }: { clinics: ClinicAssociationDt
         type,
       },
       {
-        onSuccess: () => {
-          toast.success('Leave added');
+        onSuccess: (result) => {
+          if (result.cancelledAppointments.length > 0) {
+            toast.success(
+              `Leave added — ${result.cancelledAppointments.length} appointment${result.cancelledAppointments.length === 1 ? '' : 's'} cancelled and ${result.cancelledAppointments.length === 1 ? 'patient was' : 'patients were'} notified`,
+            );
+          } else {
+            toast.success('Leave added');
+          }
           setOpen(false);
         },
         onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not add leave'),

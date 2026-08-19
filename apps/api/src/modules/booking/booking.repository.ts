@@ -176,4 +176,27 @@ export const bookingRepository = {
       },
     });
   },
+
+  /** Phase 19 — Doctor Leave conflict resolution. `clinicId: null` means "every clinic this
+   * doctor practices at" (a leave with no clinic scope), matching `DoctorLeave.clinicId`'s own
+   * nullable semantics. Only `CANCELLABLE_STATUSES` are relevant here — an already-cancelled,
+   * completed, or checked-in appointment is never touched. */
+  findConflictingAppointments(doctorId: string, clinicId: string | null, rangeStart: Date, rangeEnd: Date) {
+    return prisma.appointment.findMany({
+      where: {
+        doctorId,
+        ...(clinicId ? { clinicId } : {}),
+        scheduledAt: { gte: rangeStart, lt: rangeEnd },
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: {
+        patient: { include: { user: true } },
+        doctor: { include: { specialization: true } },
+        clinic: true,
+        prescriptions: { select: { id: true } },
+        payment: { select: { id: true, status: true } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+  },
 };
