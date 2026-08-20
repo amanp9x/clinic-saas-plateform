@@ -432,3 +432,17 @@ export const DocumentExpiryStatus = {
   EXPIRED: 'EXPIRED',
 } as const;
 export type DocumentExpiryStatus = (typeof DocumentExpiryStatus)[keyof typeof DocumentExpiryStatus];
+
+// ---------------------------------------------------------------------------
+// Contact Message Triage (Phase 22)
+// ---------------------------------------------------------------------------
+
+/** NEW -> IN_PROGRESS -> RESOLVED, admin-driven only — the submitter has no account/session to
+ * act from. RESOLVED is terminal; a genuinely new inquiry from the same person arrives as its own
+ * new row, same precedent as SupportTicketStatus's small explicit transition table. */
+export const ContactMessageStatus = {
+  NEW: 'NEW',
+  IN_PROGRESS: 'IN_PROGRESS',
+  RESOLVED: 'RESOLVED',
+} as const;
+export type ContactMessageStatus = (typeof ContactMessageStatus)[keyof typeof ContactMessageStatus];

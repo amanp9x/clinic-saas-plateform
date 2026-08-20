@@ -1075,15 +1075,30 @@ model Article {
   @@map("articles")
 }
 
-model ContactMessage {
-  id        String   @id @default(uuid())
-  name      String
-  email     String
-  phone     String?
-  subject   String
-  message   String
-  createdAt DateTime @default(now())
+/// Phase 22 — Contact Message Triage. NEW -> IN_PROGRESS -> RESOLVED, admin-driven only (the
+/// submitter has no account/session to act from). RESOLVED is terminal — a genuinely new inquiry
+/// from the same person arrives as its own new row, mirroring SupportTicketStatus's precedent of a
+/// small explicit transition table.
+enum ContactMessageStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
 
+model ContactMessage {
+  id                String               @id @default(uuid())
+  name              String
+  email             String
+  phone             String?
+  subject           String
+  message           String
+  status            ContactMessageStatus @default(NEW)
+  adminReply        String?
+  respondedAt       DateTime?
+  respondedByUserId String?
+  createdAt         DateTime             @default(now())
+
+  @@index([status, createdAt])
   @@map("contact_messages")
 }
 

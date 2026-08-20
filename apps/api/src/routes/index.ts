@@ -45,6 +45,7 @@ import { platformAdminRouter } from '../modules/platform-admin/platform-admin.ro
 import { supportTicketRouter } from '../modules/support-tickets/support-ticket.routes.js';
 import { platformSupportTicketsRouter } from '../modules/support-tickets/platform-support-tickets.routes.js';
 import { prescriptionRefillRouter, doctorRefillRequestsRouter } from '../modules/prescription-refill/prescription-refill.routes.js';
+import { platformContactMessagesRouter } from '../modules/contact/platform-contact-messages.routes.js';
 
 export const apiRouter = Router();
 
@@ -110,5 +111,6 @@ apiRouter.use('/clinic/follow-ups', clinicFollowUpsRouter);
 // More specific than the bare '/platform-admin' mount below — must be registered first, same
 // prefix-ordering reason as the '/clinic/*' block above.
 apiRouter.use('/platform-admin/tickets', platformSupportTicketsRouter);
+apiRouter.use('/platform-admin/contact-messages', platformContactMessagesRouter);
 apiRouter.use('/platform-admin', platformAdminRouter);
 apiRouter.use('/clinic', clinicRouter);
