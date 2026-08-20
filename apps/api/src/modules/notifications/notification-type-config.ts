@@ -98,6 +98,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // suppressible via a preference toggle.
   PRESCRIPTION_REFILL_DECLINED: { tier: 'TRANSACTIONAL', category: 'prescription', priority: 'NORMAL' },
 
+  // Phase 23 — Automated Staff Invitation Expiry. OPTIONAL, matching VACCINATION_DUE/FOLLOW_UP_DUE's
+  // reasoning exactly: a helpful "this went unused, feel free to re-invite" nudge to the admin who
+  // sent it, not a record of something urgent — nothing bad happens if it's missed.
+  STAFF_INVITATION_EXPIRED: { tier: 'OPTIONAL', category: 'none', priority: 'LOW' },
+
   // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
   // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
   // must never be silently suppressed by a preference toggle — same reasoning as

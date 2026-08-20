@@ -262,3 +262,22 @@ export function vaccinationDueEmail(ctx: VaccinationDueEmailContext): RenderedEm
   });
   return { subject: ctx.isOverdue ? 'Vaccination overdue' : 'Vaccination due soon', html, text };
 }
+
+export interface StaffInvitationExpiredEmailContext {
+  clinicName: string;
+  invitedEmail: string;
+  actionUrl: string;
+}
+
+export function staffInvitationExpiredEmail(ctx: StaffInvitationExpiredEmailContext): RenderedEmail {
+  const { html, text } = renderShell({
+    heading: 'A staff invitation went unused',
+    lines: [
+      `Your invitation for ${ctx.invitedEmail} to join ${ctx.clinicName} was never accepted and has now expired.`,
+      'You can send a new invitation whenever you’re ready.',
+    ],
+    actionLabel: 'Manage staff',
+    actionUrl: ctx.actionUrl,
+  });
+  return { subject: 'Staff invitation expired', html, text };
+}

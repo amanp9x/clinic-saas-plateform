@@ -65,6 +65,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
 
   PRESCRIPTION_REFILL_DECLINED: Pill,
 
+  STAFF_INVITATION_EXPIRED: ShieldCheck,
+
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,
 };

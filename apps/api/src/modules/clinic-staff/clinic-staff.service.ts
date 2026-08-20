@@ -146,9 +146,15 @@ export const clinicStaffService = {
     if (!invitation) throw new NotFoundError('Invitation');
     if (invitation.status !== 'PENDING') throw new ConflictError(`An invitation with status ${invitation.status} cannot be revoked`);
 
-    const updated = await clinicStaffRepository.updateInvitation(invitationId, { status: 'REVOKED' });
+    // Atomic claim — the background expiry sweep (reminder.service.ts) can be racing this exact
+    // invitation if its link just lapsed, so a plain read-then-update here could resurrect an
+    // already-EXPIRED row back to REVOKED. Losing the race means the sweep got there first.
+    const claimed = await clinicStaffRepository.claimInvitationTransition(invitationId, 'PENDING', 'REVOKED');
+    if (claimed !== 1) throw new ConflictError('An invitation with status EXPIRED cannot be revoked');
+
+    const updated = await clinicStaffRepository.findInvitationById(invitationId, clinicId);
     recordAuditLog({ actorUserId: userId, action: 'clinic.staff_invitation_revoked', entityType: 'StaffInvitation', entityId: invitationId, clinicId, metadata: { email: invitation.email } });
-    return toStaffInvitationDto({ ...updated, invitedBy: await prisma.user.findUniqueOrThrow({ where: { id: updated.invitedByUserId } }) });
+    return toStaffInvitationDto({ ...updated!, invitedBy: await prisma.user.findUniqueOrThrow({ where: { id: updated!.invitedByUserId } }) });
   },
 
   /** Public — no authenticated session exists yet. Links an existing account by email instead

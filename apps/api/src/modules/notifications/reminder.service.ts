@@ -1,8 +1,10 @@
 import type { AppointmentStatus } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 import { logger } from '../../config/logger.js';
+import { recordAuditLog } from '../../utils/audit-log.js';
 import { notifyUser } from './notification-dispatch.service.js';
-import { appointmentReminderEmail, clinicDocumentExpiringEmail, followUpDueEmail, vaccinationDueEmail } from './email/templates.js';
+import { appointmentReminderEmail, clinicDocumentExpiringEmail, followUpDueEmail, staffInvitationExpiredEmail, vaccinationDueEmail } from './email/templates.js';
+import { clinicStaffRepository } from '../clinic-staff/clinic-staff.repository.js';
 import { env } from '../../config/env.js';
 
 const ACTIVE_STATUSES: AppointmentStatus[] = ['CONFIRMED', 'CHECKED_IN'];
@@ -350,6 +352,61 @@ export async function processDueVaccinationReminders(now: Date = new Date()): Pr
   return { processed };
 }
 
+function staffManagementUrl(): string {
+  return `${env.WEB_URL}/clinic/staff`;
+}
+
+/**
+ * Phase 23 — Automated Staff Invitation Expiry. Unlike every other reminder in this file, this one
+ * actually mutates its source row (`StaffInvitation.status`), not just reads it — a PENDING
+ * invitation whose 7-day link has lapsed was previously never swept, which permanently blocked
+ * `clinicStaffService.invite()`'s duplicate-check for that email (see
+ * `clinicStaffRepository.findPendingInvitation`). Each candidate is claimed atomically
+ * (`claimInvitationTransition`) before any side effect runs, so this can safely race a concurrent
+ * `revokeInvitation` call or another overlapping tick of itself — exactly one of them ever wins a
+ * given row. `notificationKey` is still included as defense-in-depth, matching every other
+ * reminder here, even though the claim alone already prevents a double-notify.
+ */
+export async function processStaleInvitationExpiries(now: Date = new Date()): Promise<{ processed: number }> {
+  let processed = 0;
+  const candidates = await clinicStaffRepository.findStaleInvitations(now);
+
+  for (const invitation of candidates) {
+    const claimed = await clinicStaffRepository.claimInvitationTransition(invitation.id, 'PENDING', 'EXPIRED');
+    if (claimed !== 1) continue; // lost the race to a revoke or another tick — nothing more to do
+
+    recordAuditLog({
+      actorUserId: null,
+      action: 'clinic.staff_invitation_expired',
+      entityType: 'StaffInvitation',
+      entityId: invitation.id,
+      clinicId: invitation.clinicId,
+      metadata: { email: invitation.email },
+    });
+
+    const notificationKey = `staff-invitation:${invitation.id}:expired`;
+    const actionUrl = staffManagementUrl();
+    const email = invitation.invitedBy.email
+      ? staffInvitationExpiredEmail({ clinicName: invitation.clinic.name, invitedEmail: invitation.email, actionUrl })
+      : undefined;
+
+    await notifyUser({
+      userId: invitation.invitedByUserId,
+      type: 'STAFF_INVITATION_EXPIRED',
+      title: 'Staff invitation expired',
+      message: `Your invitation for ${invitation.email} to join ${invitation.clinic.name} was never accepted and has expired.`,
+      relatedEntityType: 'StaffInvitation',
+      relatedEntityId: invitation.id,
+      actionUrl,
+      notificationKey,
+      email,
+    });
+    processed++;
+  }
+
+  return { processed };
+}
+
 let reminderInterval: NodeJS.Timeout | null = null;
 
 /** Started once at process boot (server.ts only — never in app.ts/tests, so the test suite never
@@ -363,6 +420,7 @@ export function startReminderScheduler(intervalMs = 60_000): void {
     processDueFollowUpReminders().catch((err) => logger.error({ err }, 'processDueFollowUpReminders failed'));
     processDueDocumentExpiryReminders().catch((err) => logger.error({ err }, 'processDueDocumentExpiryReminders failed'));
     processDueVaccinationReminders().catch((err) => logger.error({ err }, 'processDueVaccinationReminders failed'));
+    processStaleInvitationExpiries().catch((err) => logger.error({ err }, 'processStaleInvitationExpiries failed'));
   }, intervalMs);
   reminderInterval.unref?.();
 }
