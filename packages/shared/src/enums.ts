@@ -76,6 +76,8 @@ export const PaymentProvider = {
   MOCK: 'MOCK',
   RAZORPAY: 'RAZORPAY',
   STRIPE: 'STRIPE',
+  // Phase 24 — no gateway involved; staff recorded money collected in person.
+  OFFLINE: 'OFFLINE',
 } as const;
 export type PaymentProvider = (typeof PaymentProvider)[keyof typeof PaymentProvider];
 
@@ -111,6 +113,8 @@ export const PaymentMethod = {
   NETBANKING: 'NETBANKING',
   WALLET: 'WALLET',
   OTHER: 'OTHER',
+  // Phase 24 — counter/walk-in cash collection.
+  CASH: 'CASH',
 } as const;
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod];
 

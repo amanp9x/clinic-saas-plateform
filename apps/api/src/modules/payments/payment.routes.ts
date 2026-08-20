@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { UserRole, createPaymentOrderSchema, paymentIdParamSchema, paymentListQuerySchema, refundPaymentSchema, verifyPaymentSchema } from '@clinic/shared';
+import { UserRole, collectCounterPaymentSchema, createPaymentOrderSchema, paymentIdParamSchema, paymentListQuerySchema, refundPaymentSchema, verifyPaymentSchema } from '@clinic/shared';
 import { paymentController } from './payment.controller.js';
 import { authenticate } from '../../middleware/authenticate.js';
 import { authorize } from '../../middleware/authorize.js';
@@ -54,4 +54,12 @@ paymentsRouter.post(
   paymentSensitiveRateLimiter,
   validate({ params: paymentIdParamSchema, body: refundPaymentSchema }),
   paymentController.refund,
+);
+
+paymentsRouter.post(
+  '/collect',
+  authorize(UserRole.RECEPTIONIST, UserRole.CLINIC_STAFF, UserRole.CLINIC_ADMIN),
+  paymentSensitiveRateLimiter,
+  validate({ body: collectCounterPaymentSchema }),
+  paymentController.collectCounterPayment,
 );

@@ -51,4 +51,9 @@ export const paymentController = {
     const payment = await paymentEngine.refund(req.user!.id, req.user!.role, req.params.id!, req.body);
     sendSuccess(res, { payment }, { message: 'Refund processed' });
   }),
+
+  collectCounterPayment: asyncHandler(async (req: Request, res: Response) => {
+    const payment = await paymentEngine.collectCounterPayment(req.user!.id, req.user!.role, req.body);
+    sendSuccess(res, { payment }, { status: 201, message: 'Payment recorded' });
+  }),
 };

@@ -1,6 +1,6 @@
 import type { PaymentTransactionStatus, UserRole } from '@prisma/client';
 import { CLINIC_PERMISSIONS } from '@clinic/shared';
-import type { ClinicBillingQuery, ClinicBillingRowDto, ClinicBillingSummaryDto, PaginatedResult, PaymentDto, PaymentListQuery, PaymentOrderDto, PaymentSummaryDto, RefundPaymentInput, VerifyPaymentInput } from '@clinic/shared';
+import type { ClinicBillingQuery, ClinicBillingRowDto, ClinicBillingSummaryDto, CollectCounterPaymentInput, PaginatedResult, PaymentDto, PaymentListQuery, PaymentOrderDto, PaymentSummaryDto, RefundPaymentInput, VerifyPaymentInput } from '@clinic/shared';
 import { prisma } from '../../config/database.js';
 import { env } from '../../config/env.js';
 import { AppError, ConflictError, NotFoundError, ValidationError } from '../../utils/app-error.js';
@@ -624,6 +624,76 @@ export const paymentEngine = {
       },
     };
   },
+
+  /** Phase 24 — Walk-in / Counter Cash Payment Recording. Reception records money actually
+   * collected in person for an appointment that never went through (or abandoned) the online
+   * checkout flow. Reuses `calculatePrice` for the authoritative amount — staff never types in a
+   * total, closing the "cash collected with zero financial record" gap the flag-only
+   * `Appointment.paymentStatus` field left open (see its own doc comment in schema.prisma).
+   * Concurrency: `Payment.appointmentId` is `@unique`, so two reception clicks racing this same
+   * appointment have exactly one insert succeed; the loser's caught unique-constraint violation
+   * becomes a clean 409 — the same unique-constraint-as-claim idiom used elsewhere in this
+   * codebase (e.g. waitlist join), not a new concurrency mechanism. */
+  async collectCounterPayment(userId: string, role: UserRole, input: CollectCounterPaymentInput): Promise<PaymentDto> {
+    const appointment = await bookingRepository.findAppointmentByIdForActor(input.appointmentId);
+    if (!appointment) throw new NotFoundError('Appointment');
+    await assertClinicPermission(userId, role, appointment.clinicId, CLINIC_PERMISSIONS.PAYMENT_COLLECT);
+
+    if (appointment.status === 'CANCELLED' || appointment.status === 'NO_SHOW') {
+      throw new ConflictError('Cannot record a payment for a cancelled or no-show appointment');
+    }
+    if (appointment.payment) {
+      throw new ConflictError('This appointment already has a payment record — use refund/view instead of recording a new one');
+    }
+
+    const price = await calculatePrice(appointment.doctorId, appointment.clinicId);
+
+    let created: PaymentWithRelations;
+    try {
+      created = await paymentRepository.createPayment({
+        appointmentId: input.appointmentId,
+        patientId: appointment.patientId,
+        doctorId: appointment.doctorId,
+        clinicId: appointment.clinicId,
+        provider: 'OFFLINE',
+        subtotal: price.subtotal,
+        discount: price.discount,
+        tax: price.tax,
+        amount: price.amount,
+        currency: price.currency,
+        expiresAt: new Date(), // never "active" (see ACTIVE_PAYMENT_STATUSES) — captured below immediately
+      });
+    } catch (err) {
+      if (isUniqueConstraintError(err)) {
+        throw new ConflictError('A payment for this appointment was just recorded by someone else');
+      }
+      throw err;
+    }
+
+    const receiptRef = `counter-${created.id}`;
+    const captured = await applyCapture(created, undefined, {
+      providerPaymentId: receiptRef,
+      providerOrderId: receiptRef,
+      status: 'captured',
+      amount: price.amount,
+      currency: price.currency,
+      method: input.method,
+    });
+
+    // Separate from applyCapture's own generic `payment.captured` log (which always attributes to
+    // the patient, matching the online-checkout case it was written for) — this one records who at
+    // the front desk actually took the money, which matters for a cash-handling audit trail.
+    recordAuditLog({
+      actorUserId: userId,
+      action: 'payment.collected_at_counter',
+      entityType: 'Payment',
+      entityId: created.id,
+      clinicId: appointment.clinicId,
+      metadata: { appointmentId: input.appointmentId, method: input.method, amount: price.amount, notes: input.notes || null },
+    });
+
+    return toPaymentDto(captured);
+  },
 };
 
 /** Internal — no authorization here, callers (`refund`, `handleAppointmentCancelled`) are
@@ -641,15 +711,19 @@ async function performRefund(payment: PaymentWithRelations, input: { amount: num
 
   try {
     if (!payment.providerPaymentId) throw new Error('No provider payment id to refund');
-    const provider = getProviderByName(payment.provider);
-    const providerResult = await provider.createRefund({ providerPaymentId: payment.providerPaymentId, amount: input.amount, reason: input.reason });
+    // Phase 24 — an OFFLINE (counter cash/card/UPI) payment has no gateway to call at all; "refund"
+    // just means the clinic physically hands the money back, recorded locally only.
+    const providerRefundId =
+      payment.provider === 'OFFLINE'
+        ? `counter-refund-${refundRow.id}`
+        : (await getProviderByName(payment.provider).createRefund({ providerPaymentId: payment.providerPaymentId, amount: input.amount, reason: input.reason })).providerRefundId;
 
     const capturedTotal = Number(payment.capturedAmount ?? payment.amount);
     const newRefundedAmount = Number(payment.refundedAmount) + input.amount;
     const isFull = capturedTotal - newRefundedAmount <= 0.01;
     const finalStatus: PaymentTransactionStatus = isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED';
 
-    await paymentRepository.updateRefund(refundRow.id, { status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED', providerRefundId: providerResult.providerRefundId });
+    await paymentRepository.updateRefund(refundRow.id, { status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED', providerRefundId });
     await paymentRepository.updateStatus(payment.id, { status: finalStatus, refundedAmount: newRefundedAmount });
 
     recordAuditLog({

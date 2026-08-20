@@ -11,12 +11,14 @@ import { useReceptionCheckIn } from '@/hooks/reception/use-reception-appointment
 import { useReceptionMarkNoShowAppointment } from '@/hooks/reception/use-reception-booking';
 import { ReceptionRescheduleDialog } from '@/components/reception/reception-reschedule-dialog';
 import { ReceptionCancelDialog } from '@/components/reception/reception-cancel-dialog';
+import { CollectPaymentDialog } from '@/components/reception/collect-payment-dialog';
 import { ApiError } from '@/lib/api-client';
 import { formatDateTime } from '@/lib/format';
 
 const CHECKABLE_STATUSES = new Set(['PENDING', 'CONFIRMED']);
 const RESCHEDULABLE_STATUSES = new Set(['PENDING', 'CONFIRMED']);
 const NO_SHOWABLE_STATUSES = new Set(['CONFIRMED', 'CHECKED_IN']);
+const NOT_COLLECTIBLE_STATUSES = new Set(['CANCELLED', 'NO_SHOW']);
 
 export function AppointmentTable({ appointments }: { appointments: ReceptionAppointmentSummaryDto[] }) {
   const checkIn = useReceptionCheckIn();
@@ -128,9 +130,21 @@ export function AppointmentTable({ appointments }: { appointments: ReceptionAppo
                     No-show
                   </Button>
                 )}
-                {!CHECKABLE_STATUSES.has(a.status) && !RESCHEDULABLE_STATUSES.has(a.status) && !NO_SHOWABLE_STATUSES.has(a.status) && (
-                  <span className="text-muted-foreground text-xs">—</span>
+                {!a.paymentStatus && !NOT_COLLECTIBLE_STATUSES.has(a.status) && (
+                  <CollectPaymentDialog
+                    appointmentId={a.id}
+                    patientName={a.patientName}
+                    trigger={
+                      <Button size="sm" variant="outline">
+                        Collect Payment
+                      </Button>
+                    }
+                  />
                 )}
+                {!CHECKABLE_STATUSES.has(a.status) &&
+                  !RESCHEDULABLE_STATUSES.has(a.status) &&
+                  !NO_SHOWABLE_STATUSES.has(a.status) &&
+                  (a.paymentStatus || NOT_COLLECTIBLE_STATUSES.has(a.status)) && <span className="text-muted-foreground text-xs">—</span>}
               </div>
             </TableCell>
           </TableRow>

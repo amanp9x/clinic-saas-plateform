@@ -270,6 +270,9 @@ enum PaymentProvider {
   MOCK
   RAZORPAY
   STRIPE
+  /// Phase 24 — no gateway is involved at all; staff recorded money collected in person
+  /// (walk-in counter cash/card/UPI). Captured instantly, never goes through CREATED/PENDING.
+  OFFLINE
 }
 
 /// Payment (order-level) transaction lifecycle — the source of truth for whether an appointment
@@ -302,6 +305,8 @@ enum PaymentMethod {
   NETBANKING
   WALLET
   OTHER
+  /// Phase 24 — counter/walk-in cash collection.
+  CASH
 }
 
 enum RefundStatus {

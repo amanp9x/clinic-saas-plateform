@@ -8,6 +8,7 @@ import {
   type BookingConfirmationDto,
   type ConsultationType,
   type Gender,
+  type PaymentDto,
 } from '@clinic/shared';
 import { apiFetch } from '@/lib/api-client';
 import { useQueueSocket } from '@/hooks/use-queue-socket';
@@ -112,6 +113,16 @@ export function useReceptionMarkNoShowAppointment() {
   return useMutation({
     mutationFn: ({ id, clinicId, reason }: { id: string; clinicId: string; reason?: string }) =>
       apiFetch(`/api/v1/reception/appointments/${id}/no-show`, { method: 'PATCH', body: { clinicId, reason } }),
+    onSuccess: () => invalidateAfterBookingChange(queryClient),
+  });
+}
+
+/** Phase 24 — records a walk-in/counter payment (cash, card, or UPI collected in person). */
+export function useCollectCounterPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { appointmentId: string; method: 'CASH' | 'CARD' | 'UPI' | 'OTHER'; notes?: string }) =>
+      apiFetch<{ payment: PaymentDto }>('/api/v1/payments/collect', { method: 'POST', body: input }),
     onSuccess: () => invalidateAfterBookingChange(queryClient),
   });
 }

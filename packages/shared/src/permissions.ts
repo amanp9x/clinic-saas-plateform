@@ -48,6 +48,12 @@ export const CLINIC_PERMISSIONS = {
   PAYMENT_REFUND: 'payment.refund',
   BILLING_VIEW: 'billing.view',
 
+  // Phase 24 — Walk-in / Counter Cash Payment Recording. Distinct from PAYMENT_REFUND: recording
+  // money actually collected in person is a separate, meaningful action from reversing one, same
+  // "one permission per action group" convention. Not granted to RECEPTIONIST/CLINIC_STAFF by
+  // default; must be explicitly assigned per clinic.
+  PAYMENT_COLLECT: 'payment.collect',
+
   // Phase 10 — Notifications & Communication.
   NOTIFICATION_ANNOUNCE: 'notification.announce',
 

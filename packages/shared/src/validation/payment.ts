@@ -26,6 +26,18 @@ export const refundPaymentSchema = z.object({
 });
 export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
 
+/** Phase 24 — the realistic in-person collection methods only; NETBANKING/WALLET (online-only
+ * concepts) are deliberately excluded from this staff-facing counter-collection form even though
+ * the underlying PaymentMethod enum technically has them. `amount` is never accepted from the
+ * client — the authoritative price is always recomputed server-side via calculatePrice, same as
+ * online checkout, so staff can't accidentally under/over-record what's actually due. */
+export const collectCounterPaymentSchema = z.object({
+  appointmentId: z.string().uuid('Select an appointment'),
+  method: z.enum(['CASH', 'CARD', 'UPI', 'OTHER']),
+  notes: z.string().trim().max(300).optional().or(z.literal('')),
+});
+export type CollectCounterPaymentInput = z.infer<typeof collectCounterPaymentSchema>;
+
 export const paymentListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(50).default(10),
