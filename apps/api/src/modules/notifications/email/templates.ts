@@ -240,3 +240,25 @@ export function clinicDocumentExpiringEmail(ctx: DocumentExpiryEmailContext): Re
   });
   return { subject: ctx.isExpired ? 'Compliance document expired' : 'Compliance document expiring soon', html, text };
 }
+
+export interface VaccinationDueEmailContext {
+  patientName: string;
+  vaccineName: string;
+  dueDate: Date;
+  isOverdue: boolean;
+  actionUrl: string;
+}
+
+export function vaccinationDueEmail(ctx: VaccinationDueEmailContext): RenderedEmail {
+  const { html, text } = renderShell({
+    heading: ctx.isOverdue ? 'A vaccination is overdue' : 'A vaccination is due soon',
+    lines: [
+      ctx.isOverdue
+        ? `Hi ${ctx.patientName}, your ${ctx.vaccineName} was due on ${formatDateOnly(ctx.dueDate)}. Please schedule it as soon as you can.`
+        : `Hi ${ctx.patientName}, your ${ctx.vaccineName} is due on ${formatDateOnly(ctx.dueDate)}.`,
+    ],
+    actionLabel: 'View vaccination records',
+    actionUrl: ctx.actionUrl,
+  });
+  return { subject: ctx.isOverdue ? 'Vaccination overdue' : 'Vaccination due soon', html, text };
+}

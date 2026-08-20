@@ -87,6 +87,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // able to silently mute via a preference toggle — same reasoning as CLINIC_VERIFICATION_UPDATED.
   CLINIC_DOCUMENT_EXPIRING: { tier: 'TRANSACTIONAL', category: 'none', priority: 'HIGH' },
 
+  // Phase 20 — Vaccination Due Reminders. OPTIONAL, matching APPOINTMENT_REMINDER/FOLLOW_UP_DUE's
+  // tier exactly — a helpful proactive nudge, not a record of something that already happened, so
+  // it's suppressible like every other reminder-class notification in this codebase.
+  VACCINATION_DUE: { tier: 'OPTIONAL', category: 'none', priority: 'NORMAL', defaultExpiryMinutes: 60 * 24 * 30 },
+
   // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
   // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
   // must never be silently suppressed by a preference toggle — same reasoning as

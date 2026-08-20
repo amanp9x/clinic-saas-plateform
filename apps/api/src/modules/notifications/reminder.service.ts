@@ -2,7 +2,7 @@ import type { AppointmentStatus } from '@prisma/client';
 import { prisma } from '../../config/database.js';
 import { logger } from '../../config/logger.js';
 import { notifyUser } from './notification-dispatch.service.js';
-import { appointmentReminderEmail, clinicDocumentExpiringEmail, followUpDueEmail } from './email/templates.js';
+import { appointmentReminderEmail, clinicDocumentExpiringEmail, followUpDueEmail, vaccinationDueEmail } from './email/templates.js';
 import { env } from '../../config/env.js';
 
 const ACTIVE_STATUSES: AppointmentStatus[] = ['CONFIRMED', 'CHECKED_IN'];
@@ -268,6 +268,88 @@ export async function processDueDocumentExpiryReminders(now: Date = new Date()):
   return { processed };
 }
 
+interface VaccinationDueTier {
+  key: string;
+  daysBefore: number;
+  isOverdue: boolean;
+}
+
+/** Two tiers — a heads-up before the due date, and a single overdue nudge once it's passed. Same
+ * tiered-reminder shape as `DOCUMENT_EXPIRY_TIERS` above. */
+const VACCINATION_DUE_TIERS: VaccinationDueTier[] = [
+  { key: '7d', daysBefore: 7, isOverdue: false },
+  { key: 'overdue', daysBefore: 0, isOverdue: true },
+];
+
+function vaccinationRecordsUrl(): string {
+  return `${env.WEB_URL}/medical-records/vaccinations`;
+}
+
+/**
+ * Phase 20 — Vaccination Due Reminders. `Vaccination.nextDueDate` has been written since Phase 18
+ * but nothing ever read it — this is the reader. Same idempotent-via-notificationKey idiom as
+ * every other reminder in this file: each (vaccination, tier) pair produces at most one
+ * notification ever, enforced by `Notification.notificationKey`'s unique index. No cron sweep —
+ * a vaccination whose `nextDueDate` has long since passed keeps matching the query on every tick
+ * forever, but the idempotency guard means that's harmless (matches the same "always safe to
+ * reprocess" convention `processDueFollowUpReminders`/`processDueDocumentExpiryReminders` rely on).
+ */
+export async function processDueVaccinationReminders(now: Date = new Date()): Promise<{ processed: number }> {
+  let processed = 0;
+  const windowEnd = new Date(now.getTime() + 7 * 24 * 60 * 60_000);
+
+  const candidates = await prisma.vaccination.findMany({
+    where: { nextDueDate: { not: null, lte: windowEnd } },
+    select: {
+      id: true,
+      vaccineName: true,
+      doseNumber: true,
+      nextDueDate: true,
+      patient: { select: { fullName: true, userId: true, user: { select: { email: true } } } },
+    },
+  });
+
+  for (const v of candidates) {
+    for (const tier of VACCINATION_DUE_TIERS) {
+      const dueAt = new Date(v.nextDueDate!.getTime() - tier.daysBefore * 24 * 60 * 60_000);
+      if (now < dueAt) continue;
+
+      const notificationKey = `vaccination:${v.id}:${tier.key}`;
+      const existing = await prisma.notification.findUnique({ where: { notificationKey }, select: { id: true } });
+      if (existing) continue;
+
+      const actionUrl = vaccinationRecordsUrl();
+      const doseLabel = v.doseNumber ? ` (dose ${v.doseNumber})` : '';
+      const email = v.patient.user.email
+        ? vaccinationDueEmail({
+            patientName: v.patient.fullName,
+            vaccineName: v.vaccineName,
+            dueDate: v.nextDueDate!,
+            isOverdue: tier.isOverdue,
+            actionUrl,
+          })
+        : undefined;
+
+      await notifyUser({
+        userId: v.patient.userId,
+        type: 'VACCINATION_DUE',
+        title: tier.isOverdue ? `${v.vaccineName} vaccination overdue` : `${v.vaccineName} vaccination due soon`,
+        message: tier.isOverdue
+          ? `Your ${v.vaccineName}${doseLabel} was due on ${v.nextDueDate!.toLocaleDateString('en-IN')}. Please schedule it soon.`
+          : `Your ${v.vaccineName}${doseLabel} is due on ${v.nextDueDate!.toLocaleDateString('en-IN')}.`,
+        relatedEntityType: 'Vaccination',
+        relatedEntityId: v.id,
+        actionUrl,
+        notificationKey,
+        email,
+      });
+      processed++;
+    }
+  }
+
+  return { processed };
+}
+
 let reminderInterval: NodeJS.Timeout | null = null;
 
 /** Started once at process boot (server.ts only — never in app.ts/tests, so the test suite never
@@ -280,6 +362,7 @@ export function startReminderScheduler(intervalMs = 60_000): void {
     processDueReminders().catch((err) => logger.error({ err }, 'processDueReminders failed'));
     processDueFollowUpReminders().catch((err) => logger.error({ err }, 'processDueFollowUpReminders failed'));
     processDueDocumentExpiryReminders().catch((err) => logger.error({ err }, 'processDueDocumentExpiryReminders failed'));
+    processDueVaccinationReminders().catch((err) => logger.error({ err }, 'processDueVaccinationReminders failed'));
   }, intervalMs);
   reminderInterval.unref?.();
 }
