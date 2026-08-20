@@ -92,6 +92,12 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // it's suppressible like every other reminder-class notification in this codebase.
   VACCINATION_DUE: { tier: 'OPTIONAL', category: 'none', priority: 'NORMAL', defaultExpiryMinutes: 60 * 24 * 30 },
 
+  // Phase 21 — Prescription Refill Requests. TRANSACTIONAL, matching PRESCRIPTION_READY/
+  // SUPPORT_TICKET_UPDATE's reasoning exactly: this is a direct response to an action the patient
+  // themselves took (requesting a refill), not a proactive nudge, so it must never be silently
+  // suppressible via a preference toggle.
+  PRESCRIPTION_REFILL_DECLINED: { tier: 'TRANSACTIONAL', category: 'prescription', priority: 'NORMAL' },
+
   // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
   // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
   // must never be silently suppressed by a preference toggle — same reasoning as

@@ -63,6 +63,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
 
   VACCINATION_DUE: Syringe,
 
+  PRESCRIPTION_REFILL_DECLINED: Pill,
+
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,
 };

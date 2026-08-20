@@ -44,6 +44,7 @@ import { clinicFollowUpsRouter } from '../modules/follow-up/clinic-follow-ups.ro
 import { platformAdminRouter } from '../modules/platform-admin/platform-admin.routes.js';
 import { supportTicketRouter } from '../modules/support-tickets/support-ticket.routes.js';
 import { platformSupportTicketsRouter } from '../modules/support-tickets/platform-support-tickets.routes.js';
+import { prescriptionRefillRouter, doctorRefillRequestsRouter } from '../modules/prescription-refill/prescription-refill.routes.js';
 
 export const apiRouter = Router();
 
@@ -62,6 +63,7 @@ apiRouter.use('/analytics', analyticsRouter);
 apiRouter.use('/reviews', reviewsRouter);
 apiRouter.use('/waitlist', waitlistRouter);
 apiRouter.use('/support/tickets', supportTicketRouter);
+apiRouter.use('/prescriptions', prescriptionRefillRouter);
 
 // --- Payments & Billing (Phase 9) --------------------------------------------
 // The webhook router (unauthenticated, signature-verified) must be registered before the
@@ -77,6 +79,7 @@ apiRouter.use('/doctor/queue', queueRouter);
 apiRouter.use('/doctor/consultations', consultationRouter);
 apiRouter.use('/doctor/prescriptions', prescriptionRouter);
 apiRouter.use('/doctor/settings/signature', signatureRouter);
+apiRouter.use('/doctor/refill-requests', doctorRefillRequestsRouter);
 
 // --- Reception / Clinic Staff Portal (Phase 5) -------------------------------
 apiRouter.use('/reception', receptionRouter);

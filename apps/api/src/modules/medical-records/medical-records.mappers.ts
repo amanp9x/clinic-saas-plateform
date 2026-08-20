@@ -22,6 +22,7 @@ export function toPrescriptionDto(prescription: Prescription & { doctor: Doctor 
     medications: parseMedications(prescription.medications),
     notes: prescription.notes,
     fileUrl: prescription.fileUrl,
+    status: prescription.status,
   };
 }
 

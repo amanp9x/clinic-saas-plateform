@@ -84,6 +84,9 @@ export interface PrescriptionDto {
   medications: MedicationItem[];
   notes: string | null;
   fileUrl: string | null;
+  /** Added in Phase 21 so the patient portal can gate "Request Refill" to prescriptions the
+   * doctor has actually signed off on. */
+  status: 'DRAFT' | 'FINALIZED';
 }
 
 export interface LabReportDto {

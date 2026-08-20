@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'PRESCRIPTION_REFILL_DECLINED';

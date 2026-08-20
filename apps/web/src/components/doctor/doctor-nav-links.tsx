@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LineChart,
   Radio,
+  RefreshCcw,
   Settings,
   Star,
 } from 'lucide-react';
@@ -25,6 +26,7 @@ export const DOCTOR_NAV_LINKS = [
   { href: '/doctor/queue', label: 'Live Queue', icon: Radio, matchPrefix: '/doctor/queue' },
   { href: '/doctor/schedule', label: 'Schedule', icon: CalendarClock, matchPrefix: '/doctor/schedule' },
   { href: '/doctor/prescriptions', label: 'Prescriptions', icon: FileText, matchPrefix: '/doctor/prescriptions' },
+  { href: '/doctor/refill-requests', label: 'Refill Requests', icon: RefreshCcw },
   { href: '/doctor/earnings', label: 'Earnings', icon: IndianRupee },
   { href: '/doctor/analytics', label: 'Analytics', icon: LineChart },
   { href: '/doctor/reviews', label: 'Reviews', icon: Star },
