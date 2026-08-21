@@ -10,6 +10,7 @@ import type {
 import { AppointmentStatus } from '@prisma/client';
 import { clinicRepository } from './clinic.repository.js';
 import { DEFAULT_CLINIC_SETTINGS_DTO, toClinicDocumentDto, toClinicProfileDto, toClinicSettingsDto } from './clinic.mappers.js';
+import { cancelFutureAppointmentsForClinic } from './clinic.shared.js';
 import { assertClinicPermission } from '../reception/reception.shared.js';
 import { prisma } from '../../config/database.js';
 import { startOfDay, endOfDay } from '../../utils/date.js';
@@ -67,16 +68,27 @@ export const clinicService = {
       statusUpdatedAt: new Date(),
     });
 
+    emitToClinicRoom(clinicId, SOCKET_EVENTS.CLINIC.STATUS_UPDATED, { clinicId, status: input.status, reason: input.reason ?? null });
+
+    // Going non-OPEN (from any previous status) must not leave every doctor's already-booked
+    // appointments at this clinic silently active — mirrors Phase 26's per-doctor cascade, scoped
+    // to the whole clinic. Re-running this on repeated non-OPEN updates is always safe: once no
+    // PENDING/CONFIRMED rows remain, the scan simply finds nothing.
+    let cancelledAppointmentCount = 0;
+    if (input.status !== 'OPEN') {
+      cancelledAppointmentCount = await cancelFutureAppointmentsForClinic(clinicId, userId, input.reason?.trim() || 'This clinic is currently closed');
+    }
+
     recordAuditLog({
       actorUserId: userId,
       action: 'clinic.status_updated',
       entityType: 'Clinic',
       entityId: clinicId,
       clinicId,
-      metadata: { previousState: { status: clinic.status }, newState: { status: input.status, reason: input.reason } },
+      metadata: { previousState: { status: clinic.status }, newState: { status: input.status, reason: input.reason }, cancelledAppointmentCount },
     });
-    emitToClinicRoom(clinicId, SOCKET_EVENTS.CLINIC.STATUS_UPDATED, { clinicId, status: input.status, reason: input.reason ?? null });
-    return toClinicProfileDto(updated);
+
+    return { clinic: toClinicProfileDto(updated), cancelledAppointmentCount };
   },
 
   async getSettings(userId: string, role: UserRole, clinicId: string) {

@@ -38,7 +38,10 @@ export function useUpdateClinicStatus(clinicId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ status, reason }: { status: ClinicOperatingStatus; reason?: string }) =>
-      apiFetch<{ clinic: ClinicProfileDto }>('/api/v1/clinic/status', { method: 'PATCH', body: { clinicId, status, reason } }),
+      apiFetch<{ clinic: ClinicProfileDto; cancelledAppointmentCount: number }>('/api/v1/clinic/status', {
+        method: 'PATCH',
+        body: { clinicId, status, reason },
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: profileKey(clinicId) });
       queryClient.invalidateQueries({ queryKey: ['clinic', 'dashboard'] });

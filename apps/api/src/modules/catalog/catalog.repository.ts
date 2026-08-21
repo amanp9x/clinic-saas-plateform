@@ -257,6 +257,12 @@ export const catalogRepository = {
   async listClinics(filters: ClinicSearchInput) {
     const where: Prisma.ClinicWhereInput = {
       isActive: true,
+      // Phase 27 — a clinic suspended either way (platform-admin verification enforcement, or the
+      // clinic's own self-service operating status) must never surface in public search, even
+      // though neither path unpublishes it via `isActive`. CLOSED/TEMPORARILY_CLOSED intentionally
+      // stay visible — those mean "temporarily inactive," not "shut down."
+      verificationStatus: { not: 'SUSPENDED' },
+      status: { not: 'SUSPENDED' },
       ...(filters.city ? { city: { equals: filters.city, mode: 'insensitive' } } : {}),
       ...(filters.area ? { area: { equals: filters.area, mode: 'insensitive' } } : {}),
       ...(filters.query ? { name: { contains: filters.query, mode: 'insensitive' } } : {}),

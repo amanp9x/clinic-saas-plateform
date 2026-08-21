@@ -25,8 +25,8 @@ export const clinicController = {
 
   updateStatus: asyncHandler(async (req: Request, res: Response) => {
     const { clinicId, ...input } = req.body;
-    const clinic = await clinicService.updateStatus(req.user!.id, req.user!.role, clinicId, input);
-    sendSuccess(res, { clinic }, { message: 'Clinic status updated' });
+    const { clinic, cancelledAppointmentCount } = await clinicService.updateStatus(req.user!.id, req.user!.role, clinicId, input);
+    sendSuccess(res, { clinic, cancelledAppointmentCount }, { message: 'Clinic status updated' });
   }),
 
   getSettings: asyncHandler(async (req: Request, res: Response) => {

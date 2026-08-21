@@ -14,7 +14,8 @@ export type SlotClosedReason =
   | 'CLINIC_CLOSED'
   | 'CLINIC_HOLIDAY'
   | 'DOCTOR_ON_LEAVE'
-  | 'NO_SESSIONS_TODAY';
+  | 'NO_SESSIONS_TODAY'
+  | 'CLINIC_SUSPENDED';
 
 export interface AvailabilityResultDto {
   date: string;

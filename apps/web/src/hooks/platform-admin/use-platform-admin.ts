@@ -54,7 +54,10 @@ export function useUpdateClinicVerification() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, status, notes }: { id: string; status: ClinicVerificationStatus; notes?: string }) =>
-      apiFetch<{ clinic: PlatformClinicDetailDto }>(`/api/v1/platform-admin/clinics/${id}/verification`, { method: 'PATCH', body: { status, notes } }),
+      apiFetch<{ clinic: PlatformClinicDetailDto; cancelledAppointmentCount: number }>(`/api/v1/platform-admin/clinics/${id}/verification`, {
+        method: 'PATCH',
+        body: { status, notes },
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PLATFORM_KEY }),
   });
 }

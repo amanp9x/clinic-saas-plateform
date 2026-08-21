@@ -22,7 +22,8 @@ export type SlotClosedReason =
   | 'CLINIC_CLOSED'
   | 'CLINIC_HOLIDAY'
   | 'DOCTOR_ON_LEAVE'
-  | 'NO_SESSIONS_TODAY';
+  | 'NO_SESSIONS_TODAY'
+  | 'CLINIC_SUSPENDED';
 
 export interface AvailabilityResult {
   slots: GeneratedSlot[];
@@ -70,6 +71,14 @@ export async function generateAvailableSlots(params: {
     doctor: doctorSummary,
     clinic: clinicSummary,
   });
+
+  // Phase 27 — the clinic itself (not just this one doctor association) may be non-operational:
+  // self-service CLOSED/TEMPORARILY_CLOSED/SUSPENDED, or a platform-admin verification suspension.
+  // Distinct from `CLINIC_CLOSED` below, which means "closed per today's weekly working-hours
+  // schedule" — a different, narrower cause.
+  if (clinicDoctor.clinic.status !== 'OPEN' || clinicDoctor.clinic.verificationStatus === 'SUSPENDED') {
+    return empty('CLINIC_SUSPENDED');
+  }
 
   if (
     !clinicDoctor.isActive ||

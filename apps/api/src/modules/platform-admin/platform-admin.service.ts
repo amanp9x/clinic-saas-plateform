@@ -14,6 +14,7 @@ import type {
 import { platformAdminRepository } from './platform-admin.repository.js';
 import { toComplianceDocumentRowDto, toPlatformClinicDetailDto, toPlatformClinicRowDto } from './platform-admin.mappers.js';
 import { clinicRepository } from '../clinic/clinic.repository.js';
+import { cancelFutureAppointmentsForClinic } from '../clinic/clinic.shared.js';
 import { ConflictError, NotFoundError, ValidationError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
 import { emitToClinicRoom } from '../../sockets/emit.js';
@@ -83,7 +84,11 @@ export const platformAdminService = {
     return toPlatformClinicDetailDto(clinic, documents);
   },
 
-  async updateVerification(actorUserId: string, id: string, input: ClinicVerificationUpdateInput): Promise<PlatformClinicDetailDto> {
+  async updateVerification(
+    actorUserId: string,
+    id: string,
+    input: ClinicVerificationUpdateInput,
+  ): Promise<{ clinic: PlatformClinicDetailDto; cancelledAppointmentCount: number }> {
     const clinic = await platformAdminRepository.findClinicDetail(id);
     if (!clinic) {
       throw new NotFoundError('Clinic');
@@ -101,13 +106,22 @@ export const platformAdminService = {
       verificationReviewedByUserId: actorUserId,
     });
 
+    // A platform-admin suspension is the most serious "shut this clinic down" action that exists —
+    // it must not leave every doctor's already-booked appointments here silently active. Mirrors
+    // Phase 26's per-doctor cascade at clinic scope. `input.notes` is guaranteed non-empty for
+    // SUSPENDED (validated above).
+    let cancelledAppointmentCount = 0;
+    if (input.status === 'SUSPENDED') {
+      cancelledAppointmentCount = await cancelFutureAppointmentsForClinic(id, actorUserId, input.notes!.trim());
+    }
+
     recordAuditLog({
       actorUserId,
       action: 'platform.clinic_verification_updated',
       entityType: 'Clinic',
       entityId: id,
       clinicId: id,
-      metadata: { previousStatus: clinic.verificationStatus, newStatus: input.status, notes: input.notes || null },
+      metadata: { previousStatus: clinic.verificationStatus, newStatus: input.status, notes: input.notes || null, cancelledAppointmentCount },
     });
 
     const admins = await platformAdminRepository.clinicAdminUserIds(id);
@@ -130,7 +144,7 @@ export const platformAdminService = {
     emitToClinicRoom(id, SOCKET_EVENTS.CLINIC.VERIFICATION_UPDATED, { clinicId: id, status: input.status });
 
     const documents = await clinicRepository.listDocuments(id);
-    return toPlatformClinicDetailDto(updated, documents);
+    return { clinic: toPlatformClinicDetailDto(updated, documents), cancelledAppointmentCount };
   },
 
   async updateDocumentStatus(actorUserId: string, clinicId: string, documentId: string, input: ClinicDocumentStatusUpdateInput): Promise<PlatformClinicDetailDto> {

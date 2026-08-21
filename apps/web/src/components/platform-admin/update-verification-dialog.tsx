@@ -44,8 +44,12 @@ export function UpdateVerificationDialog({
     updateVerification.mutate(
       { id: clinicId, status: targetStatus, notes: notes.trim() || undefined },
       {
-        onSuccess: () => {
-          toast.success(`${clinicName} moved to ${targetStatus.replace('_', ' ')}`);
+        onSuccess: (res) => {
+          toast.success(
+            res.cancelledAppointmentCount > 0
+              ? `${clinicName} moved to ${targetStatus.replace('_', ' ')} — ${res.cancelledAppointmentCount} upcoming appointment${res.cancelledAppointmentCount === 1 ? '' : 's'} cancelled`
+              : `${clinicName} moved to ${targetStatus.replace('_', ' ')}`,
+          );
           setNotes('');
           setOpen(false);
         },

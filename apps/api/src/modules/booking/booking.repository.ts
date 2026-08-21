@@ -199,4 +199,25 @@ export const bookingRepository = {
       orderBy: { scheduledAt: 'asc' },
     });
   },
+
+  /** Phase 27 — clinic-wide sibling of `findConflictingAppointments`: every doctor's booked
+   * appointments at this clinic, not just one doctor's. Used when the whole clinic (not a single
+   * doctor association) goes non-operational. */
+  findConflictingAppointmentsForClinic(clinicId: string, rangeStart: Date, rangeEnd: Date) {
+    return prisma.appointment.findMany({
+      where: {
+        clinicId,
+        scheduledAt: { gte: rangeStart, lt: rangeEnd },
+        status: { in: ['PENDING', 'CONFIRMED'] },
+      },
+      include: {
+        patient: { include: { user: true } },
+        doctor: { include: { specialization: true } },
+        clinic: true,
+        prescriptions: { select: { id: true } },
+        payment: { select: { id: true, status: true } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+    });
+  },
 };

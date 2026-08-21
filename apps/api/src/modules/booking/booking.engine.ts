@@ -69,6 +69,12 @@ async function assertSlotStillEligible(doctorId: string, clinicId: string, sched
   if (!clinicDoctor.isActive || clinicDoctor.status !== 'ACTIVE' || !clinicDoctor.isAcceptingAppointments) {
     throw new ConflictError('This doctor is no longer accepting appointments at this clinic');
   }
+  // Phase 27 — the clinic itself may have gone non-operational (closed/suspended) since the hold
+  // was created; a hold proves exclusive claim on a slot, not immunity from the clinic shutting
+  // down while it was held.
+  if (clinicDoctor.clinic.status !== 'OPEN' || clinicDoctor.clinic.verificationStatus === 'SUSPENDED') {
+    throw new ConflictError('This clinic is not currently accepting bookings');
+  }
 
   const dateOnly = new Date(Date.UTC(scheduledAt.getFullYear(), scheduledAt.getMonth(), scheduledAt.getDate()));
   const leaves = await bookingRepository.findDoctorLeaves(doctorId, clinicId, dateOnly);

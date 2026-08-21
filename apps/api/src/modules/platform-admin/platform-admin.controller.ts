@@ -20,8 +20,8 @@ export const platformAdminController = {
   }),
 
   updateVerification: asyncHandler(async (req: Request, res: Response) => {
-    const clinic = await platformAdminService.updateVerification(req.user!.id, req.params.id!, req.body);
-    sendSuccess(res, { clinic }, { message: 'Verification status updated' });
+    const { clinic, cancelledAppointmentCount } = await platformAdminService.updateVerification(req.user!.id, req.params.id!, req.body);
+    sendSuccess(res, { clinic, cancelledAppointmentCount }, { message: 'Verification status updated' });
   }),
 
   updateDocumentStatus: asyncHandler(async (req: Request, res: Response) => {

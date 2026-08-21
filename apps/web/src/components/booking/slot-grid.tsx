@@ -11,6 +11,7 @@ const CLOSED_REASON_LABELS: Record<SlotClosedReason, string> = {
   CLINIC_HOLIDAY: 'The clinic is closed for a holiday on this day.',
   DOCTOR_ON_LEAVE: 'The doctor is on leave on this day.',
   NO_SESSIONS_TODAY: 'The doctor has no sessions scheduled on this day.',
+  CLINIC_SUSPENDED: 'This clinic is temporarily not accepting bookings.',
 };
 
 function formatSlotTime(iso: string): string {

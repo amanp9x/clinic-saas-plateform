@@ -139,8 +139,12 @@ function ClinicProfileForm({ clinicId, clinic }: { clinicId: string; clinic: Cli
                     updateStatus.mutate(
                       { status: nextStatus, reason: statusReason || undefined },
                       {
-                        onSuccess: () => {
-                          toast.success('Clinic status updated');
+                        onSuccess: (res) => {
+                          toast.success(
+                            res.cancelledAppointmentCount > 0
+                              ? `Clinic status updated — ${res.cancelledAppointmentCount} upcoming appointment${res.cancelledAppointmentCount === 1 ? '' : 's'} cancelled`
+                              : 'Clinic status updated',
+                          );
                           setStatusOpen(false);
                         },
                         onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not update status'),
