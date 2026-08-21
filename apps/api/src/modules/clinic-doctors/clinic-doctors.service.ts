@@ -4,6 +4,9 @@ import { clinicDoctorsRepository } from './clinic-doctors.repository.js';
 import { toClinicDoctorDetail, toClinicDoctorSummary, toExistingDoctorSearchResult } from './clinic-doctors.mappers.js';
 import { assertClinicPermission } from '../reception/reception.shared.js';
 import { queueRepository } from '../doctor-queue/queue.repository.js';
+import { bookingEngine } from '../booking/booking.engine.js';
+import { bookingRepository } from '../booking/booking.repository.js';
+import { paymentEngine } from '../payments/payment.engine.js';
 import { prisma } from '../../config/database.js';
 import { ConflictError, NotFoundError } from '../../utils/app-error.js';
 import { recordAuditLog } from '../../utils/audit-log.js';
@@ -12,6 +15,35 @@ import { emitToClinicRoom } from '../../sockets/emit.js';
 async function sessionFor(doctorId: string, clinicId: string) {
   const session = await queueRepository.findSession(doctorId, clinicId);
   return session ? { status: session.status, queueStatus: session.queueStatus } : null;
+}
+
+/** A doctor going non-ACTIVE at a clinic (or the association being removed outright) must not
+ * silently orphan appointments already booked with them here — `requireDoctorAtClinic` already
+ * blocks *new* bookings the moment `isActive` flips false, but nothing previously cancelled the
+ * ones that already exist. `Appointment` has no FK to `ClinicDoctor` (only direct doctorId/clinicId),
+ * so deleting or deactivating the association never cascades on its own. This reuses the exact
+ * scan-then-atomically-claim-then-cancel core `doctor.service.ts::createLeave` already established
+ * (findConflictingAppointments -> per-appointment updateMany-guard -> cancelCore -> refund) rather
+ * than inventing a second cancellation path — `far future` stands in for "no end date" since
+ * `findConflictingAppointments` takes a bounded range. */
+const FAR_FUTURE = new Date('2999-12-31T23:59:59.999Z');
+
+async function cancelFutureAppointmentsAtClinic(doctorId: string, clinicId: string, actorUserId: string, reason: string): Promise<number> {
+  const conflicts = await bookingRepository.findConflictingAppointments(doctorId, clinicId, new Date(), FAR_FUTURE);
+
+  let cancelledCount = 0;
+  for (const appointment of conflicts) {
+    const claim = await prisma.appointment.updateMany({
+      where: { id: appointment.id, status: { in: ['PENDING', 'CONFIRMED'] } },
+      data: { status: 'CANCELLED' },
+    });
+    if (claim.count !== 1) continue;
+
+    await bookingEngine.cancelCore(appointment, { reason, actorUserId, source: 'RECEPTION' });
+    await paymentEngine.handleAppointmentCancelled(appointment.id, actorUserId);
+    cancelledCount++;
+  }
+  return cancelledCount;
 }
 
 export const clinicDoctorsService = {
@@ -99,16 +131,31 @@ export const clinicDoctorsService = {
       isActive: input.status === 'ACTIVE',
     });
 
+    emitToClinicRoom(clinicId, SOCKET_EVENTS.DOCTOR_ASSOCIATION.UPDATED, { clinicId, doctorId: assoc.doctorId });
+
+    // Going non-ACTIVE (from any previous status, including re-confirming an already-non-ACTIVE
+    // one) must never leave a booked appointment behind — re-running this is always safe: once no
+    // PENDING/CONFIRMED rows remain for this doctor+clinic, the scan simply finds nothing.
+    let cancelledAppointmentCount = 0;
+    if (input.status !== 'ACTIVE') {
+      cancelledAppointmentCount = await cancelFutureAppointmentsAtClinic(
+        assoc.doctorId,
+        clinicId,
+        userId,
+        input.reason?.trim() || 'This doctor is no longer available at this clinic',
+      );
+    }
+
     recordAuditLog({
       actorUserId: userId,
       action: 'clinic.doctor_status_updated',
       entityType: 'ClinicDoctor',
       entityId: clinicDoctorId,
       clinicId,
-      metadata: { previousState: { status: assoc.status }, newState: { status: input.status } },
+      metadata: { previousState: { status: assoc.status }, newState: { status: input.status }, cancelledAppointmentCount },
     });
-    emitToClinicRoom(clinicId, SOCKET_EVENTS.DOCTOR_ASSOCIATION.UPDATED, { clinicId, doctorId: assoc.doctorId });
-    return toClinicDoctorDetail(updated, await sessionFor(assoc.doctorId, clinicId));
+
+    return { doctor: toClinicDoctorDetail(updated, await sessionFor(assoc.doctorId, clinicId)), cancelledAppointmentCount };
   },
 
   async remove(userId: string, role: UserRole, clinicId: string, clinicDoctorId: string) {
@@ -116,9 +163,22 @@ export const clinicDoctorsService = {
     const assoc = await clinicDoctorsRepository.findAssociationById(clinicDoctorId, clinicId);
     if (!assoc) throw new NotFoundError('Doctor association');
 
+    // Cancel before deleting the association row — the cascade needs the doctorId/clinicId pair,
+    // and cancelling first (rather than after) means a crash mid-way never leaves the association
+    // gone while a stale appointment still looks legitimately bookable.
+    const cancelledAppointmentCount = await cancelFutureAppointmentsAtClinic(assoc.doctorId, clinicId, userId, 'Doctor removed from this clinic');
+
     await clinicDoctorsRepository.remove(clinicDoctorId);
 
-    recordAuditLog({ actorUserId: userId, action: 'clinic.doctor_association_removed', entityType: 'ClinicDoctor', entityId: clinicDoctorId, clinicId, metadata: { doctorId: assoc.doctorId } });
+    recordAuditLog({
+      actorUserId: userId,
+      action: 'clinic.doctor_association_removed',
+      entityType: 'ClinicDoctor',
+      entityId: clinicDoctorId,
+      clinicId,
+      metadata: { doctorId: assoc.doctorId, cancelledAppointmentCount },
+    });
     emitToClinicRoom(clinicId, SOCKET_EVENTS.DOCTOR_ASSOCIATION.UPDATED, { clinicId, doctorId: assoc.doctorId });
+    return { cancelledAppointmentCount };
   },
 };

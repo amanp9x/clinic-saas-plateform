@@ -170,7 +170,10 @@ function DoctorAssociationForm({ clinicId, doctor, departments }: { clinicId: st
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Remove this doctor from the clinic?</DialogTitle>
-                  <DialogDescription>This removes their availability and schedule at this clinic. The Doctor account itself is unaffected.</DialogDescription>
+                  <DialogDescription>
+                    This removes their availability and schedule at this clinic and cancels any upcoming appointments already booked with them here. The
+                    Doctor account itself is unaffected.
+                  </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setRemoveOpen(false)}>
@@ -180,8 +183,12 @@ function DoctorAssociationForm({ clinicId, doctor, departments }: { clinicId: st
                     variant="destructive"
                     onClick={() =>
                       removeDoctor.mutate(doctor.clinicDoctorId, {
-                        onSuccess: () => {
-                          toast.success('Doctor association removed');
+                        onSuccess: (res) => {
+                          toast.success(
+                            res.cancelledAppointmentCount > 0
+                              ? `Doctor association removed — ${res.cancelledAppointmentCount} upcoming appointment${res.cancelledAppointmentCount === 1 ? '' : 's'} cancelled`
+                              : 'Doctor association removed',
+                          );
                           router.push(`/clinic/doctors?clinicId=${clinicId}`);
                         },
                         onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not remove association'),

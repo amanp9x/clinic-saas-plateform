@@ -113,6 +113,9 @@ export type ClinicDoctorUpdateInput = z.infer<typeof clinicDoctorUpdateSchema>;
 
 export const clinicDoctorStatusUpdateSchema = z.object({
   status: z.nativeEnum(ClinicDoctorStatus),
+  /** Only meaningful when moving away from ACTIVE — becomes the cancellation reason on any
+   * already-booked appointment this cascades into cancelling. Ignored when reactivating. */
+  reason: z.string().trim().max(300).optional(),
 });
 export type ClinicDoctorStatusUpdateInput = z.infer<typeof clinicDoctorStatusUpdateSchema>;
 

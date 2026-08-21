@@ -98,7 +98,15 @@ function DoctorsContent() {
                               status &&
                               updateStatus.mutate(
                                 { clinicDoctorId: d.clinicDoctorId, status: status as never },
-                                { onSuccess: () => toast.success('Status updated'), onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not update status') },
+                                {
+                                  onSuccess: (res) =>
+                                    toast.success(
+                                      res.cancelledAppointmentCount > 0
+                                        ? `Status updated — ${res.cancelledAppointmentCount} upcoming appointment${res.cancelledAppointmentCount === 1 ? '' : 's'} cancelled`
+                                        : 'Status updated',
+                                    ),
+                                  onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Could not update status'),
+                                },
                               )
                             }
                           >

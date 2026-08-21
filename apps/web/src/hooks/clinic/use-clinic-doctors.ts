@@ -70,8 +70,11 @@ export function useUpdateClinicDoctor(clinicId: string | undefined) {
 export function useUpdateClinicDoctorStatus(clinicId: string | undefined) {
   const invalidate = useInvalidateDoctors();
   return useMutation({
-    mutationFn: ({ clinicDoctorId, status }: { clinicDoctorId: string; status: ClinicDoctorStatus }) =>
-      apiFetch<{ doctor: ClinicDoctorDetailDto }>(`/api/v1/clinic/doctors/${clinicDoctorId}/status?clinicId=${clinicId}`, { method: 'PATCH', body: { status } }),
+    mutationFn: ({ clinicDoctorId, status, reason }: { clinicDoctorId: string; status: ClinicDoctorStatus; reason?: string }) =>
+      apiFetch<{ doctor: ClinicDoctorDetailDto; cancelledAppointmentCount: number }>(`/api/v1/clinic/doctors/${clinicDoctorId}/status?clinicId=${clinicId}`, {
+        method: 'PATCH',
+        body: { status, reason },
+      }),
     onSuccess: invalidate,
   });
 }
@@ -79,7 +82,8 @@ export function useUpdateClinicDoctorStatus(clinicId: string | undefined) {
 export function useRemoveClinicDoctor(clinicId: string | undefined) {
   const invalidate = useInvalidateDoctors();
   return useMutation({
-    mutationFn: (clinicDoctorId: string) => apiFetch<null>(`/api/v1/clinic/doctors/${clinicDoctorId}?clinicId=${clinicId}`, { method: 'DELETE' }),
+    mutationFn: (clinicDoctorId: string) =>
+      apiFetch<{ cancelledAppointmentCount: number }>(`/api/v1/clinic/doctors/${clinicDoctorId}?clinicId=${clinicId}`, { method: 'DELETE' }),
     onSuccess: invalidate,
   });
 }

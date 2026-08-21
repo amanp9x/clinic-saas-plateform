@@ -32,12 +32,18 @@ export const clinicDoctorsController = {
   }),
 
   updateStatus: asyncHandler(async (req: Request, res: Response) => {
-    const doctor = await clinicDoctorsService.updateStatus(req.user!.id, req.user!.role, req.query.clinicId as string, req.params.id as string, req.body);
-    sendSuccess(res, { doctor }, { message: 'Doctor status updated' });
+    const { doctor, cancelledAppointmentCount } = await clinicDoctorsService.updateStatus(
+      req.user!.id,
+      req.user!.role,
+      req.query.clinicId as string,
+      req.params.id as string,
+      req.body,
+    );
+    sendSuccess(res, { doctor, cancelledAppointmentCount }, { message: 'Doctor status updated' });
   }),
 
   remove: asyncHandler(async (req: Request, res: Response) => {
-    await clinicDoctorsService.remove(req.user!.id, req.user!.role, req.query.clinicId as string, req.params.id as string);
-    sendSuccess(res, null, { message: 'Doctor association removed' });
+    const { cancelledAppointmentCount } = await clinicDoctorsService.remove(req.user!.id, req.user!.role, req.query.clinicId as string, req.params.id as string);
+    sendSuccess(res, { cancelledAppointmentCount }, { message: 'Doctor association removed' });
   }),
 };
