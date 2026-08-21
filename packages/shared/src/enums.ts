@@ -190,6 +190,8 @@ export const NotificationType = {
 
   STAFF_INVITATION_EXPIRED: 'STAFF_INVITATION_EXPIRED',
 
+  SETTLEMENT_STATUS_UPDATED: 'SETTLEMENT_STATUS_UPDATED',
+
   SECURITY_LOGIN: 'SECURITY_LOGIN',
   SECURITY_PASSWORD_CHANGED: 'SECURITY_PASSWORD_CHANGED',
 } as const;
@@ -452,3 +454,18 @@ export const ContactMessageStatus = {
   RESOLVED: 'RESOLVED',
 } as const;
 export type ContactMessageStatus = (typeof ContactMessageStatus)[keyof typeof ContactMessageStatus];
+
+// ---------------------------------------------------------------------------
+// Doctor Earnings Settlement Requests (Phase 25)
+// ---------------------------------------------------------------------------
+
+/** REQUESTED -> APPROVED -> PAID is the normal path; REQUESTED -> REJECTED and
+ * APPROVED -> REJECTED both end the request without a payout. Both REJECTED and PAID are
+ * terminal — a rejected request is never reopened, the doctor simply requests again. */
+export const SettlementStatus = {
+  REQUESTED: 'REQUESTED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  PAID: 'PAID',
+} as const;
+export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus];

@@ -21,7 +21,7 @@ import type {
   ScheduleSlotCreateInput,
 } from '@clinic/shared';
 import { doctorRepository } from './doctor.repository.js';
-import { resolveDoctorOrThrow, assertClinicMembership } from './doctor.shared.js';
+import { resolveDoctorOrThrow, assertClinicMembership, resolveUnsettledEarnings, PLATFORM_COMMISSION_PERCENT } from './doctor.shared.js';
 import {
   toClinicAssociationDto,
   toDoctorAppointmentSummary,
@@ -45,8 +45,6 @@ import { emitToClinicRoom } from '../../sockets/emit.js';
 import { endOfDay, startOfDay, startOfMonth, startOfWeek } from '../../utils/date.js';
 import { parseTimeString } from '../../utils/time.util.js';
 import { saveUploadedFile, deleteUploadedFile, relativePathFromUrl } from '../../services/storage.service.js';
-
-const PLATFORM_COMMISSION_PERCENT = 10;
 
 function toNullable(value: string | undefined): string | null | undefined {
   if (value === undefined) return undefined;
@@ -397,6 +395,11 @@ export const doctorService = {
     const commission = Math.round(((total * PLATFORM_COMMISSION_PERCENT) / 100) * 100) / 100;
     const net = Math.round((total - commission) * 100) / 100;
 
+    // Phase 25 — genuinely unsettled earnings (since the last PAID settlement, or ever, if none),
+    // not merely a restatement of this range's own net. Independent of `query.range`: a doctor
+    // viewing "today" should still see their real outstanding balance, not just today's slice.
+    const unsettled = await resolveUnsettledEarnings(doctor.id, doctor.createdAt);
+
     return {
       range: query.range,
       totalEarnings: total.toFixed(2),
@@ -404,7 +407,7 @@ export const doctorService = {
       platformCommissionPercent: PLATFORM_COMMISSION_PERCENT,
       platformCommissionAmount: commission.toFixed(2),
       netEarnings: net.toFixed(2),
-      pendingSettlements: net.toFixed(2),
+      pendingSettlements: unsettled.amount.toFixed(2),
     };
   },
 

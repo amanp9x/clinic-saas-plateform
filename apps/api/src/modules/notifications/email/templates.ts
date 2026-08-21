@@ -281,3 +281,25 @@ export function staffInvitationExpiredEmail(ctx: StaffInvitationExpiredEmailCont
   });
   return { subject: 'Staff invitation expired', html, text };
 }
+
+export interface SettlementStatusUpdatedEmailContext {
+  doctorName: string;
+  amount: string;
+  currency: string;
+  status: 'APPROVED' | 'REJECTED' | 'PAID';
+  reviewNotes: string | null;
+  actionUrl: string;
+}
+
+export function settlementStatusUpdatedEmail(ctx: SettlementStatusUpdatedEmailContext): RenderedEmail {
+  const heading =
+    ctx.status === 'PAID' ? 'Your settlement has been paid' : ctx.status === 'APPROVED' ? 'Your settlement request was approved' : 'Your settlement request was rejected';
+  const lines = [
+    `Hi ${ctx.doctorName}, your settlement request for ${ctx.currency} ${ctx.amount} ${
+      ctx.status === 'PAID' ? 'has been marked as paid.' : ctx.status === 'APPROVED' ? 'has been approved and is awaiting payout.' : 'was rejected.'
+    }`,
+  ];
+  if (ctx.reviewNotes) lines.push(`Note from the platform team: ${ctx.reviewNotes}`);
+  const { html, text } = renderShell({ heading, lines, actionLabel: 'View settlements', actionUrl: ctx.actionUrl });
+  return { subject: heading, html, text };
+}

@@ -103,6 +103,11 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   // sent it, not a record of something urgent — nothing bad happens if it's missed.
   STAFF_INVITATION_EXPIRED: { tier: 'OPTIONAL', category: 'none', priority: 'LOW' },
 
+  // Phase 25 — Doctor Earnings Settlement Requests. TRANSACTIONAL: money the doctor is actively
+  // waiting on being approved/rejected/paid is exactly the "I'm waiting on this" class of event —
+  // same reasoning as PAYMENT_SUCCESS/SUPPORT_TICKET_UPDATE — never silently suppressible.
+  SETTLEMENT_STATUS_UPDATED: { tier: 'TRANSACTIONAL', category: 'none', priority: 'NORMAL' },
+
   // Phase 16 — Support Tickets & Grievance Resolution. TRANSACTIONAL: a reply or status change on
   // a ticket the patient themselves opened is exactly the kind of "I'm waiting on this" event that
   // must never be silently suppressed by a preference toggle — same reasoning as

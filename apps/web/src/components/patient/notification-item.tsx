@@ -67,6 +67,8 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
 
   STAFF_INVITATION_EXPIRED: ShieldCheck,
 
+  SETTLEMENT_STATUS_UPDATED: CreditCard,
+
   SECURITY_LOGIN: ShieldAlert,
   SECURITY_PASSWORD_CHANGED: ShieldAlert,
 };

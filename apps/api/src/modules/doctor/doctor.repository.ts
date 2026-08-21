@@ -149,6 +149,13 @@ export const doctorRepository = {
     });
   },
 
+  /** Phase 25 — the doctor's most recently PAID settlement, used to derive where the next
+   * settlement's unsettled period begins. `orderBy: periodEnd` (not `createdAt`) so this is
+   * correct even if two settlements were processed slightly out of creation order. */
+  findLastPaidSettlement(doctorId: string) {
+    return prisma.settlementRequest.findFirst({ where: { doctorId, status: 'PAID' }, orderBy: { periodEnd: 'desc' } });
+  },
+
   countTodayAppointments(doctorId: string) {
     return prisma.appointment.count({
       where: {

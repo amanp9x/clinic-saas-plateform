@@ -169,6 +169,8 @@ enum NotificationType {
 
   STAFF_INVITATION_EXPIRED
 
+  SETTLEMENT_STATUS_UPDATED
+
   SECURITY_LOGIN
   SECURITY_PASSWORD_CHANGED
 }
@@ -682,29 +684,77 @@ model Doctor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user            User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  specialization  Specialization?             @relation(fields: [specializationId], references: [id], onDelete: SetNull)
-  clinics         ClinicDoctor[]
-  reviews         DoctorReview[]
-  appointments    Appointment[]
-  prescriptions   Prescription[]
-  sessions        DoctorSession[]
-  leaves          DoctorLeave[]
-  signature       DoctorSignature?
-  medicalRecords  MedicalRecord[]
-  consultations   Consultation[]
-  favorites       Favorite[]
-  slotHolds       SlotHold[]
-  blockedSlots    BlockedSlot[]
-  payments        Payment[]
-  invoices        Invoice[]
-  waitlistEntries WaitlistEntry[]
-  refillRequests  PrescriptionRefillRequest[]
+  user               User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialization     Specialization?             @relation(fields: [specializationId], references: [id], onDelete: SetNull)
+  clinics            ClinicDoctor[]
+  reviews            DoctorReview[]
+  appointments       Appointment[]
+  prescriptions      Prescription[]
+  sessions           DoctorSession[]
+  leaves             DoctorLeave[]
+  signature          DoctorSignature?
+  medicalRecords     MedicalRecord[]
+  consultations      Consultation[]
+  favorites          Favorite[]
+  slotHolds          SlotHold[]
+  blockedSlots       BlockedSlot[]
+  payments           Payment[]
+  invoices           Invoice[]
+  waitlistEntries    WaitlistEntry[]
+  refillRequests     PrescriptionRefillRequest[]
+  settlementRequests SettlementRequest[]
 
   @@index([slug])
   @@index([specializationId])
   @@index([gender])
   @@map("doctors")
+}
+
+/// Phase 25 — Doctor Earnings Settlement Requests. REQUESTED -> APPROVED -> PAID is the normal
+/// path; REQUESTED -> REJECTED and APPROVED -> REJECTED both end the request without a payout
+/// (a rejected-after-approval case, e.g. a bookkeeping error found before money actually moved).
+/// Both are terminal — a rejected request is never reopened; the doctor simply requests again,
+/// same precedent as StaffInvitationStatus/RefillRequestStatus's small explicit transition tables.
+enum SettlementStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+/// `periodStart`/`periodEnd`/`amount` are all computed server-side at request time from the same
+/// `doctorRepository.earningsAggregate` the read-only earnings dashboard already uses — never
+/// client-supplied. `respondedByUserId` is a bare reference (no relation), matching this schema's
+/// existing convention for actor fields that don't need a full relation (e.g.
+/// `verificationReviewedByUserId`, `cancelledByUserId`).
+/// IMPORTANT: "at most one ACTIVE (REQUESTED/APPROVED) request per doctor" is NOT expressible in
+/// this DSL (Postgres partial unique indexes aren't representable here) — the actual guarantee is
+/// a hand-added migration statement, same precedent as the Phase 8 booking engine's partial unique
+/// index on `appointments`. `prisma migrate diff`/`db pull` showing this as permanent drift is
+/// expected, not a bug.
+model SettlementRequest {
+  id          String           @id @default(uuid())
+  doctorId    String
+  periodStart DateTime
+  periodEnd   DateTime
+  amount      Decimal          @db.Decimal(10, 2)
+  currency    String           @default("INR")
+  status      SettlementStatus @default(REQUESTED)
+  doctorNotes String?
+
+  respondedByUserId String?
+  respondedAt       DateTime?
+  reviewNotes       String?
+  paidAt            DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@index([doctorId, status])
+  @@index([status])
+  @@map("settlement_requests")
 }
 
 /// Many-to-many: a doctor can practice at multiple clinics, with per-clinic timings.

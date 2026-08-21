@@ -46,6 +46,7 @@ import { supportTicketRouter } from '../modules/support-tickets/support-ticket.r
 import { platformSupportTicketsRouter } from '../modules/support-tickets/platform-support-tickets.routes.js';
 import { prescriptionRefillRouter, doctorRefillRequestsRouter } from '../modules/prescription-refill/prescription-refill.routes.js';
 import { platformContactMessagesRouter } from '../modules/contact/platform-contact-messages.routes.js';
+import { doctorSettlementRouter, platformSettlementRouter } from '../modules/doctor-settlement/doctor-settlement.routes.js';
 
 export const apiRouter = Router();
 
@@ -81,6 +82,7 @@ apiRouter.use('/doctor/consultations', consultationRouter);
 apiRouter.use('/doctor/prescriptions', prescriptionRouter);
 apiRouter.use('/doctor/settings/signature', signatureRouter);
 apiRouter.use('/doctor/refill-requests', doctorRefillRequestsRouter);
+apiRouter.use('/doctor/settlements', doctorSettlementRouter);
 
 // --- Reception / Clinic Staff Portal (Phase 5) -------------------------------
 apiRouter.use('/reception', receptionRouter);
@@ -112,5 +114,6 @@ apiRouter.use('/clinic/follow-ups', clinicFollowUpsRouter);
 // prefix-ordering reason as the '/clinic/*' block above.
 apiRouter.use('/platform-admin/tickets', platformSupportTicketsRouter);
 apiRouter.use('/platform-admin/contact-messages', platformContactMessagesRouter);
+apiRouter.use('/platform-admin/settlements', platformSettlementRouter);
 apiRouter.use('/platform-admin', platformAdminRouter);
 apiRouter.use('/clinic', clinicRouter);
