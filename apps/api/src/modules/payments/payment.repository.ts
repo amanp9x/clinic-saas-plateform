@@ -6,6 +6,7 @@ export const paymentDetailInclude = {
   appointment: { include: { doctor: true, clinic: true, patient: { include: { user: true } } } },
   attempts: { orderBy: { attemptNumber: 'desc' } },
   refunds: { orderBy: { createdAt: 'desc' } },
+  refundRequests: { orderBy: { createdAt: 'desc' } },
   invoice: true,
 } satisfies Prisma.PaymentInclude;
 
@@ -114,6 +115,16 @@ export const paymentRepository = {
 
   findInvoiceByPaymentId(paymentId: string) {
     return prisma.invoice.findUnique({ where: { paymentId } });
+  },
+
+  /** Phase 28 — the invoice is a point-in-time record created once at capture; nothing had ever
+   * updated it since (audit found only `create`/`findUnique` call sites). Called from the shared
+   * refund execution path so a refunded payment's invoice/receipt PDF stops permanently reading
+   * CAPTURED. No-ops (via `updateMany`) if the payment was never captured in the first place —
+   * i.e. no invoice row exists yet — matching how `handleAppointmentCancelled` already no-ops for
+   * a payment with no invoice. */
+  updateInvoiceStatus(paymentId: string, status: PaymentTransactionStatus) {
+    return prisma.invoice.updateMany({ where: { paymentId }, data: { status } });
   },
 
   createRefund(data: { paymentId: string; amount: number; reason: string; actorUserId: string }) {

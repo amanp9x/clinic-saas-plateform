@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowLeft, CalendarClock, CreditCard, MapPin, Phone, Receipt } from 'lucide-react';
 import { useAppointment, useVisitSummary } from '@/hooks/patient/use-appointments';
-import { downloadReceipt } from '@/hooks/patient/use-payments';
+import { downloadReceipt, usePayment } from '@/hooks/patient/use-payments';
 import { AppointmentStatusBadge } from '@/components/patient/appointment-status-badge';
 import { CancelAppointmentDialog } from '@/components/patient/cancel-appointment-dialog';
+import { RequestRefundDialog } from '@/components/patient/request-refund-dialog';
 import { RescheduleAppointmentDialog } from '@/components/patient/reschedule-appointment-dialog';
 import { VisitSummaryCard } from '@/components/patient/visit-summary-card';
 import { EmptyState } from '@/components/marketing/empty-state';
@@ -26,6 +27,7 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
   const { data: appointment, isLoading } = useAppointment(id);
   const isCompleted = appointment?.status === 'COMPLETED';
   const { data: visitSummary, isLoading: isSummaryLoading } = useVisitSummary(id, isCompleted);
+  const { data: payment } = usePayment(appointment?.paymentId ?? undefined);
 
   if (isLoading) {
     return (
@@ -45,6 +47,11 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
   }
 
   const canCancel = CANCELLABLE_STATUSES.has(appointment.status);
+  const activeRefundRequest = payment?.refundRequests.find((r) => r.status === 'REQUESTED');
+  const lastRejectedRefundRequest = payment?.refundRequests.find((r) => r.status === 'REJECTED');
+  const refundableAmount = payment ? payment.amount - payment.refundedAmount : 0;
+  const canRequestRefund =
+    payment && (payment.status === 'CAPTURED' || payment.status === 'PARTIALLY_REFUNDED') && !activeRefundRequest && refundableAmount > 0;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -170,6 +177,38 @@ export default function AppointmentDetailPage({ params }: { params: Promise<{ id
               {(appointment.paymentStatus === 'REFUNDED' || appointment.paymentStatus === 'PARTIALLY_REFUNDED') && (
                 <Badge variant="outline">{appointment.paymentStatus.replace('_', ' ')}</Badge>
               )}
+            </div>
+          )}
+
+          {activeRefundRequest && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Refund request pending review</p>
+                <p className="text-muted-foreground text-xs">Submitted {formatDateTime(activeRefundRequest.createdAt)}</p>
+              </div>
+              <Badge variant="secondary">Pending</Badge>
+            </div>
+          )}
+
+          {canRequestRefund && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div>
+                <p className="text-sm font-medium">Need a refund?</p>
+                {lastRejectedRefundRequest && (
+                  <p className="text-muted-foreground text-xs">
+                    A previous request was declined{lastRejectedRefundRequest.reviewNotes ? `: ${lastRejectedRefundRequest.reviewNotes}` : '.'}
+                  </p>
+                )}
+              </div>
+              <RequestRefundDialog
+                paymentId={payment!.id}
+                refundableAmount={refundableAmount}
+                trigger={
+                  <Button size="sm" variant="outline">
+                    Request refund
+                  </Button>
+                }
+              />
             </div>
           )}
 

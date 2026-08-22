@@ -4,6 +4,7 @@ import { Suspense, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSelectedClinic } from '@/hooks/clinic/use-selected-clinic';
 import { useClinicBilling } from '@/hooks/clinic/use-clinic-billing';
+import { RefundRequestsPanel } from '@/components/clinic/refund-requests-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -57,6 +58,8 @@ function BillingContent() {
           </Select>
         )}
       </div>
+
+      {clinicId && <RefundRequestsPanel clinicId={clinicId} />}
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="space-y-2">

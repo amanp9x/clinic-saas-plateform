@@ -47,6 +47,7 @@ import { platformSupportTicketsRouter } from '../modules/support-tickets/platfor
 import { prescriptionRefillRouter, doctorRefillRequestsRouter } from '../modules/prescription-refill/prescription-refill.routes.js';
 import { platformContactMessagesRouter } from '../modules/contact/platform-contact-messages.routes.js';
 import { doctorSettlementRouter, platformSettlementRouter } from '../modules/doctor-settlement/doctor-settlement.routes.js';
+import { patientRefundRequestRouter, clinicRefundRequestRouter } from '../modules/payment-refund-request/payment-refund-request.routes.js';
 
 export const apiRouter = Router();
 
@@ -71,6 +72,9 @@ apiRouter.use('/prescriptions', prescriptionRefillRouter);
 // The webhook router (unauthenticated, signature-verified) must be registered before the
 // authenticated `/payments` router — same prefix-ordering reason as the `/clinic/*` block below.
 apiRouter.use('/payments/webhooks', paymentWebhooksRouter);
+// Phase 28 — more specific than the bare `/payments` mount below, same prefix-ordering reason.
+apiRouter.use('/payments/refund-requests', clinicRefundRequestRouter);
+apiRouter.use('/payments', patientRefundRequestRouter);
 apiRouter.use('/payments', paymentsRouter);
 
 // --- Doctor Portal (Phase 4) -------------------------------------------------

@@ -30,6 +30,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   PAYMENT_FAILED: CreditCard,
   PAYMENT_REFUNDED: CreditCard,
   PAYMENT_REFUND_PENDING: CreditCard,
+  PAYMENT_REFUND_REQUEST_REJECTED: CreditCard,
 
   QUEUE_CHECKED_IN: Radio,
   PATIENT_CALLED: Radio,

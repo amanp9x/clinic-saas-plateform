@@ -153,6 +153,7 @@ export const NotificationType = {
   PAYMENT_FAILED: 'PAYMENT_FAILED',
   PAYMENT_REFUNDED: 'PAYMENT_REFUNDED',
   PAYMENT_REFUND_PENDING: 'PAYMENT_REFUND_PENDING',
+  PAYMENT_REFUND_REQUEST_REJECTED: 'PAYMENT_REFUND_REQUEST_REJECTED',
 
   QUEUE_CHECKED_IN: 'QUEUE_CHECKED_IN',
   PATIENT_CALLED: 'PATIENT_CALLED',
@@ -469,3 +470,13 @@ export const SettlementStatus = {
   PAID: 'PAID',
 } as const;
 export type SettlementStatus = (typeof SettlementStatus)[keyof typeof SettlementStatus];
+
+/** Phase 28 — a patient-initiated request to refund a captured payment, reviewed by clinic staff.
+ * REQUESTED is absent as a target — nothing ever transitions back to it, same convention as
+ * SettlementStatus above. */
+export const RefundRequestStatus = {
+  REQUESTED: 'REQUESTED',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+} as const;
+export type RefundRequestStatus = (typeof RefundRequestStatus)[keyof typeof RefundRequestStatus];

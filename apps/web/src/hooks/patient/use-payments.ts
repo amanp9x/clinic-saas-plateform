@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { PaginatedResult, PaymentDto, PaymentOrderDto, PaymentSummaryDto } from '@clinic/shared';
+import type { CreateRefundRequestInput, PaginatedResult, PaymentDto, PaymentOrderDto, PaymentSummaryDto, RefundRequestDto } from '@clinic/shared';
 import { apiFetch, ApiError } from '@/lib/api-client';
 import { clientEnv } from '@/lib/env';
 import { tokenStore } from '@/lib/token-store';
@@ -51,6 +51,18 @@ export function useSimulateCheckout() {
         method: 'POST',
         body: { outcome },
       }),
+  });
+}
+
+export function useRequestRefund(paymentId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateRefundRequestInput) =>
+      apiFetch<{ refundRequest: RefundRequestDto }>(`/api/v1/payments/${paymentId}/refund-request`, { method: 'POST', body: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [...PAYMENTS_KEY, paymentId ?? null] });
+      queryClient.invalidateQueries({ queryKey: [...PAYMENTS_KEY, 'history'] });
+    },
   });
 }
 

@@ -5,6 +5,7 @@ import type {
   PaymentOrderDto,
   PaymentSummaryDto,
   RefundDto,
+  RefundRequestSummaryDto,
 } from '@clinic/shared';
 import type { PaymentWithRelations } from './payment.repository.js';
 
@@ -32,6 +33,7 @@ export function toPaymentDto(payment: PaymentWithRelations): PaymentDto {
     createdAt: payment.createdAt.toISOString(),
     attempts: payment.attempts.map(toAttemptDto),
     refunds: payment.refunds.map(toRefundDto),
+    refundRequests: payment.refundRequests.map(toRefundRequestSummaryDto),
     invoiceNumber: payment.invoice?.invoiceNumber ?? null,
   };
 }
@@ -56,6 +58,18 @@ function toRefundDto(refund: PaymentWithRelations['refunds'][number]): RefundDto
     reason: refund.reason,
     status: refund.status,
     createdAt: refund.createdAt.toISOString(),
+  };
+}
+
+function toRefundRequestSummaryDto(request: PaymentWithRelations['refundRequests'][number]): RefundRequestSummaryDto {
+  return {
+    id: request.id,
+    amount: request.amount ? request.amount.toString() : null,
+    reason: request.reason,
+    status: request.status,
+    reviewNotes: request.reviewNotes,
+    respondedAt: request.respondedAt ? request.respondedAt.toISOString() : null,
+    createdAt: request.createdAt.toISOString(),
   };
 }
 

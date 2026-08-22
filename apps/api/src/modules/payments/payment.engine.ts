@@ -725,6 +725,11 @@ async function performRefund(payment: PaymentWithRelations, input: { amount: num
 
     await paymentRepository.updateRefund(refundRow.id, { status: isFull ? 'REFUNDED' : 'PARTIALLY_REFUNDED', providerRefundId });
     await paymentRepository.updateStatus(payment.id, { status: finalStatus, refundedAmount: newRefundedAmount });
+    // Phase 28 — keep the invoice's own status in sync with the payment it belongs to, so a
+    // refunded payment's downloadable receipt never permanently reads CAPTURED. Lives here (the
+    // one shared execution path) rather than in the refund-request approval flow specifically, so
+    // the pre-existing staff-direct refund endpoint benefits from the fix too.
+    await paymentRepository.updateInvoiceStatus(payment.id, finalStatus);
 
     recordAuditLog({
       actorUserId: input.actorUserId,

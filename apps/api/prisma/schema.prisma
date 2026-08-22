@@ -132,6 +132,7 @@ enum NotificationType {
   PAYMENT_FAILED
   PAYMENT_REFUNDED
   PAYMENT_REFUND_PENDING
+  PAYMENT_REFUND_REQUEST_REJECTED
 
   QUEUE_CHECKED_IN
   PATIENT_CALLED
@@ -316,6 +317,17 @@ enum RefundStatus {
   REFUNDED
   PARTIALLY_REFUNDED
   FAILED
+}
+
+/// Phase 28 — a patient-initiated request to refund a captured payment, reviewed by clinic staff.
+/// Distinct from `RefundStatus` (which tracks one executed refund attempt's own provider-call
+/// lifecycle) — this is the "does a human need to decide on this" layer sitting in front of it.
+/// REQUESTED is absent as a target — nothing ever transitions back to it, same convention as every
+/// other request/review lifecycle in this codebase (settlement requests, refill requests).
+enum RefundRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
 }
 
 // ---------------------------------------------------------------------------
@@ -610,6 +622,7 @@ model Clinic {
   waitlistEntries  WaitlistEntry[]
   consultations    Consultation[]
   supportTickets   SupportTicket[]
+  refundRequests   RefundRequest[]
 
   @@index([slug])
   @@index([city])
@@ -1197,6 +1210,7 @@ model Patient {
   clinicReviews   ClinicReview[]
   waitlistEntries WaitlistEntry[]
   refillRequests  PrescriptionRefillRequest[]
+  refundRequests  RefundRequest[]
 
   @@map("patients")
 }
@@ -1475,6 +1489,7 @@ model Payment {
   webhookEvents  PaymentWebhookEvent[]
   invoice        Invoice?
   refunds        Refund[]
+  refundRequests RefundRequest[]
   supportTickets SupportTicket[]
 
   @@index([patientId])
@@ -1605,6 +1620,37 @@ model Refund {
   @@index([paymentId])
   @@index([status])
   @@map("refunds")
+}
+
+/// Phase 28 — patient-initiated refund request, reviewed by clinic staff (PAYMENT_REFUND
+/// permission). Approval invokes the existing `performRefund` engine unchanged — this model is
+/// purely a request/decision wrapper in front of it, never a duplicate of its bookkeeping.
+/// `amount` null means "the full eligible amount," mirroring `RefundPaymentInput.amount`'s own
+/// optional-means-full-refund convention exactly.
+model RefundRequest {
+  id        String              @id @default(uuid())
+  paymentId String
+  patientId String
+  clinicId  String
+  amount    Decimal?            @db.Decimal(10, 2)
+  reason    String
+  status    RefundRequestStatus @default(REQUESTED)
+
+  respondedByUserId String?
+  respondedAt       DateTime?
+  reviewNotes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  clinic  Clinic  @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId, status])
+  @@index([clinicId, status])
+  @@index([patientId])
+  @@map("refund_requests")
 }
 
 model Prescription {

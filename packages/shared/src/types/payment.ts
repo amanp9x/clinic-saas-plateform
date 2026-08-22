@@ -5,6 +5,7 @@ import type {
   PaymentTransactionStatus,
   RefundStatus,
 } from '../enums.js';
+import type { RefundRequestSummaryDto } from './refund-request.js';
 
 /** Server-computed price snapshot — never accept these numbers from the client. */
 export interface PriceBreakdownDto {
@@ -61,6 +62,7 @@ export interface PaymentDto {
   createdAt: string;
   attempts: PaymentAttemptDto[];
   refunds: RefundDto[];
+  refundRequests: RefundRequestSummaryDto[];
   invoiceNumber: string | null;
 }
 

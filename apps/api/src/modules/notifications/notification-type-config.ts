@@ -46,6 +46,7 @@ export const NOTIFICATION_TYPE_CONFIG: Record<NotificationType, NotificationType
   PAYMENT_FAILED: { tier: 'TRANSACTIONAL', category: 'payment', priority: 'HIGH' },
   PAYMENT_REFUNDED: { tier: 'TRANSACTIONAL', category: 'payment', priority: 'NORMAL' },
   PAYMENT_REFUND_PENDING: { tier: 'TRANSACTIONAL', category: 'payment', priority: 'NORMAL' },
+  PAYMENT_REFUND_REQUEST_REJECTED: { tier: 'TRANSACTIONAL', category: 'payment', priority: 'NORMAL' },
 
   QUEUE_CHECKED_IN: { tier: 'OPTIONAL', category: 'queue', priority: 'NORMAL', defaultExpiryMinutes: 360 },
   PATIENT_CALLED: { tier: 'OPTIONAL', category: 'queue', priority: 'HIGH', defaultExpiryMinutes: 60 },
