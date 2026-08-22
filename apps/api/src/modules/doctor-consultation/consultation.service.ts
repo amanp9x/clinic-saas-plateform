@@ -51,11 +51,23 @@ export const consultationEngine = {
 
     const completedCountBefore = token ? await queueRepository.countByStatus(token.doctorSessionId, 'COMPLETED') : 0;
 
-    const [updatedConsultation] = await prisma.$transaction([
-      prisma.consultation.update({
-        where: { appointmentId: appointment.id },
-        data: { status: 'COMPLETED', completedAt },
-      }),
+    // Atomic claim — this consultation is reachable from two independent call sites (the doctor's
+    // own "Complete Consultation" button, and reception's "Mark Completed" queue action), so the
+    // status check above is only a fast-path courtesy, not the real guard. Only the caller that
+    // actually flips IN_PROGRESS -> COMPLETED here proceeds to the vitals/medical-record/audit
+    // cascade below; a racing second caller gets a clean 409 before any side effect ever runs —
+    // same updateMany-guard-and-count idiom used throughout this codebase (queue token claims,
+    // payment capture, refund requests).
+    const claimed = await prisma.consultation.updateMany({
+      where: { appointmentId: appointment.id, status: 'IN_PROGRESS' },
+      data: { status: 'COMPLETED', completedAt },
+    });
+    if (claimed.count !== 1) {
+      throw new ConflictError('This consultation was already completed');
+    }
+    const updatedConsultation: Consultation = { ...consultation, status: 'COMPLETED', completedAt };
+
+    await prisma.$transaction([
       prisma.appointment.update({
         where: { id: appointment.id },
         data: { status: 'COMPLETED', completedAt },
